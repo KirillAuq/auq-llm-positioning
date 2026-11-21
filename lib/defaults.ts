@@ -13,7 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fixedQuestions: DEFAULT_FIXED_QUESTIONS,
   autoQuestionCount: 6,
   models: {
-    chatgpt: "gpt-5.6-sol",
+    chatgpt: "gpt-6.2-sol",
     claude: "claude-opus-5-5",
     gemini: "gemini-3.5-flash",
     // Analyst + question generator. Deliberately not one of the three vendors
