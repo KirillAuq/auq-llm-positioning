@@ -1,8 +1,8 @@
 import { handle, HttpError, requirePassword, resolveKey } from "@/lib/server/auth";
-import { diffPrompt, gapPrompt, questionsPrompt, selfPrompt, viewPrompt } from "@/lib/server/prompts";
+import { gapPrompt, questionsPrompt, selfPrompt, viewPrompt } from "@/lib/server/prompts";
 import { analyst } from "@/lib/server/providers";
 import { PROVIDERS } from "@/lib/types";
-import type { BrandSelf, Gap, GapReport, LlmDiff, LlmView, Provider } from "@/lib/types";
+import type { BrandSelf, Gap, GapReport, LlmView, Provider } from "@/lib/types";
 
 export const maxDuration = 300;
 
@@ -72,20 +72,6 @@ export async function POST(req: Request) {
           competitors: strings(r.competitors),
         };
         return { view };
-      }
-      case "diff": {
-        const r = await run<any>(diffPrompt(str(body.brand), list(body.questions), providersIn(body.providers)));
-        const diff: LlmDiff = {
-          consensus: strings(r.consensus),
-          differences: list<any>(r.differences).map((d) => ({
-            topic: str(d?.topic),
-            chatgpt: str(d?.chatgpt),
-            claude: str(d?.claude),
-            gemini: str(d?.gemini),
-            note: str(d?.note),
-          })),
-        };
-        return { diff };
       }
       case "gaps": {
         const providers = providersIn(body.providers);

@@ -108,30 +108,6 @@ Schema:
   return { system, user };
 }
 
-/** (b) Where the LLMs differ from each other. */
-export function diffPrompt(brand: string, questions: Question[], providers: Provider[]) {
-  const system = `You compare how different AI assistants describe the same SaaS brand, from a transcript of their answers to identical questions.
-
-Find the differences that would change what a buyer believes: category, audience, use cases, features, pricing, strengths, weaknesses, competitors, and how confident or informed each assistant sounds. Ignore differences of wording, length or formatting. Report only what the assistants said; add no facts of your own and do not judge who is right.
-
-${JSON_ONLY}
-Schema:
-{
-  "consensus": [string],      // substantive points all assistants agree on
-  "differences": [{
-    "topic": string,
-    "chatgpt": string,        // its position on this topic, or "Did not address" / "Not asked"
-    "claude": string,
-    "gemini": string,
-    "note": string            // one sentence: what the disagreement is and why it matters
-  }]
-}
-List differences most consequential first.`;
-  const missing = PROVIDERS.filter((p) => !providers.includes(p));
-  const user = `Brand: ${brand}\n${missing.length ? `Not available in this run (use "Not asked"): ${missing.join(", ")}\n` : ""}\n<transcript>\n${transcript(questions, providers)}\n</transcript>`;
-  return { system, user };
-}
-
 /** (d) Brand's self-description versus what the LLMs believe. */
 export function gapPrompt(
   self: BrandSelf,

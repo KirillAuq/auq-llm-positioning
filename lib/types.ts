@@ -87,17 +87,6 @@ export interface LlmView {
   competitors: string[];
 }
 
-export interface LlmDiff {
-  consensus: string[];
-  differences: {
-    topic: string;
-    chatgpt: string;
-    claude: string;
-    gemini: string;
-    note: string;
-  }[];
-}
-
 export type GapType =
   | "contradiction"
   | "omission"
@@ -138,7 +127,6 @@ export interface Report {
   self?: BrandSelf;
   questions: Question[];
   views: Partial<Record<Provider, LlmView>>;
-  diff?: LlmDiff;
   gapReport?: GapReport;
   /** Non-fatal problems the reader should know about. */
   notes: string[];
