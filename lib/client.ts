@@ -1,9 +1,9 @@
 "use client";
 
 import { DEFAULT_SETTINGS } from "./defaults";
-import { PROVIDER_LABEL, PROVIDERS } from "./types";
+import { PROVIDER_LABEL, PROVIDERS, SIMILARITY_LABEL } from "./types";
 import type {
-  Answer, BrandSelf, GapReport, KeyName, LlmView, Provider, Question, Report, ScrapedPage, Settings,
+  Answer, BrandSelf, GapReport, KeyName, LlmView, Provider, Question, QuestionComparison, Report, ScrapedPage, Settings,
 } from "./types";
 
 const SETTINGS_KEY = "lpa.settings.v1";
@@ -99,7 +99,7 @@ export const STEPS: { id: StepId; label: string }[] = [
   { id: "fixed", label: "Ask the fixed questions" },
   { id: "generate", label: "Generate follow-up questions" },
   { id: "generated", label: "Ask the follow-up questions" },
-  { id: "analyze", label: "Summarise each LLM's view" },
+  { id: "analyze", label: "Summarise each LLM and score the fixed questions" },
   { id: "gaps", label: "Find the positioning gaps" },
 ];
 
@@ -231,19 +231,26 @@ export async function runAudit(
     }
   }
 
-  // 6. (a) per-LLM views, in parallel
+  // 6. (a) per-LLM views and the question-by-question comparison, in parallel
   const analyze = { brand: brandName, questions: report.questions, model: settings.models.deepinfra, auth };
   let done = 0;
-  const total = providers.length;
+  const total = providers.length + 1;
   onProgress({ step: "analyze", detail: "", done, total });
   const tick = (detail: string) => onProgress({ step: "analyze", detail, done: ++done, total });
-  await Promise.all(
-    providers.map(async (p) => {
+  await Promise.all([
+    ...providers.map(async (p) => {
       const { view } = await api<{ view: LlmView }>("/api/analyze", { ...analyze, step: "view", provider: p });
       report.views[p] = view;
       tick(`${PROVIDER_LABEL[p]} summarised`);
     }),
-  );
+    // The rest of the report stands without this section, so a failure here is a note, not a stop.
+    api<{ comparisons: QuestionComparison[] }>("/api/analyze", {
+      ...analyze, step: "compare", questions: fixed, self, positioningDoc: input.positioningDoc, providers,
+    })
+      .then(({ comparisons }) => { report.comparisons = comparisons; })
+      .catch((err) => { notes.push(`The question-by-question comparison could not be built: ${err instanceof Error ? err.message : err}`); })
+      .finally(() => tick("Fixed questions scored")),
+  ]);
 
   // 7. (d) Brand vs LLMs
   onProgress({ step: "gaps", detail: settings.models.deepinfra, done: 0, total: 1 });
@@ -277,6 +284,20 @@ export function reportToMarkdown(r: Report): string {
       L.push(`**Why it matters:** ${gap.whyItMatters}`, "", `**Suggested fix:** ${gap.suggestedFix}`, "");
     });
     L.push("### Where the LLMs match the brand", bullets(g.aligned), "");
+  }
+
+  if (r.comparisons?.length) {
+    L.push("## Question by question: brand vs LLMs", "");
+    for (const c of r.comparisons) {
+      const q = r.questions.find((x) => x.id === c.questionId);
+      if (!q) continue;
+      L.push(`### ${q.text}`, "", `**What the brand says:** ${c.brandSays}`, "");
+      for (const p of PROVIDERS) {
+        const e = c.llms[p];
+        if (e) L.push(`- **${PROVIDER_LABEL[p]}** (${SIMILARITY_LABEL[e.similarity]}): ${[e.llmSays, e.note].filter(Boolean).join(" — ")}`);
+      }
+      L.push("");
+    }
   }
 
   L.push("## How each LLM sees the brand", "");

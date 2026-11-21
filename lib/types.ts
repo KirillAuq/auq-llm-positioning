@@ -115,6 +115,25 @@ export interface GapReport {
   aligned: string[];
 }
 
+/** How closely an LLM's answer to one question matches the brand's own answer. */
+export type Similarity = "high" | "medium" | "low" | "n/a";
+
+export const SIMILARITY_LABEL: Record<Similarity, string> = {
+  high: "High similarity",
+  medium: "Medium similarity",
+  low: "Low similarity",
+  "n/a": "Can't compare",
+};
+
+export interface QuestionComparison {
+  questionId: string;
+  /** The brand's own answer to the question, from its material only. */
+  brandSays: string;
+  /** False when the brand's material does not answer the question. */
+  brandStated: boolean;
+  llms: Partial<Record<Provider, { similarity: Similarity; llmSays: string; note: string }>>;
+}
+
 export interface Report {
   id: string;
   createdAt: string;
@@ -127,6 +146,8 @@ export interface Report {
   self?: BrandSelf;
   questions: Question[];
   views: Partial<Record<Provider, LlmView>>;
+  /** One entry per fixed question. */
+  comparisons?: QuestionComparison[];
   gapReport?: GapReport;
   /** Non-fatal problems the reader should know about. */
   notes: string[];

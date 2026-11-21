@@ -108,6 +108,59 @@ Schema:
   return { system, user };
 }
 
+/** Per fixed question: the brand's own answer, and how close each LLM's answer is to it. */
+export function comparePrompt(self: BrandSelf, positioningDoc: string, fixed: Question[], providers: Provider[]) {
+  const system = `You score, question by question, how closely AI assistants' answers about a SaaS brand match the brand's own answer. The reader is the brand's marketing team.
+
+You are given:
+- <brand_self>: the brand's self-description, extracted only from its own pages and positioning doc, plus the positioning doc itself. This is the sole reference for what the brand says.
+- <transcript>: the questions, and each assistant's answer to each.
+
+For every question:
+1. Write "brandSays": the answer the brand itself gives to that question, in 1-3 sentences, built only from <brand_self> and keeping the brand's wording and emphasis. If the material does not answer the question, set "brandStated" to false and "brandSays" to "Not stated in the brand's material". Never fill the gap from your own knowledge or from the assistants' answers.
+2. For each assistant, write "llmSays" (its answer condensed to 1-2 sentences, reporting only what it said) and rate "similarity" between its answer and the brand's:
+   - "high": same substance and same emphasis. A buyer would come away with the picture the brand intends. Extra accurate-sounding detail or different wording does not lower the rating.
+   - "medium": overlaps on the main point but misses, adds or reframes something that matters.
+   - "low": a different picture: contradicts the brand, describes a different audience or product, is generic boilerplate, or the assistant does not know the brand.
+   - "n/a": cannot be compared, because the brand's material does not answer the question or the assistant gave no answer.
+3. "note": one sentence naming the specific thing that matches or differs. For "n/a", say why it cannot be compared.
+
+Rules:
+- Judge substance, not wording, length or formatting.
+- Measure closeness to the brand's stated positioning, not accuracy against the world. Do not use your own knowledge of the brand or market.
+- Rate each assistant independently; do not grade on a curve.
+
+${JSON_ONLY}
+Schema:
+{
+  "questions": [{
+    "n": number,                 // the question's n from the transcript; include every question
+    "brandSays": string,
+    "brandStated": boolean,
+    "llms": {                    // one entry per assistant in this run
+      "chatgpt": {"similarity": "high" | "medium" | "low" | "n/a", "llmSays": string, "note": string},
+      "claude":  {...},
+      "gemini":  {...}
+    }
+  }]
+}`;
+
+  const user = `Assistants in this run: ${providers.join(", ")}
+
+<brand_self>
+${JSON.stringify(self, null, 1)}
+
+<positioning_doc>
+${positioningDoc.trim() || "(none provided)"}
+</positioning_doc>
+</brand_self>
+
+<transcript>
+${transcript(fixed, providers)}
+</transcript>`;
+  return { system, user };
+}
+
 /** (d) Brand's self-description versus what the LLMs believe. */
 export function gapPrompt(
   self: BrandSelf,

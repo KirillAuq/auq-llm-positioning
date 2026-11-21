@@ -1,8 +1,8 @@
 import { handle, HttpError, requirePassword, resolveKey } from "@/lib/server/auth";
-import { gapPrompt, questionsPrompt, selfPrompt, viewPrompt } from "@/lib/server/prompts";
+import { comparePrompt, gapPrompt, questionsPrompt, selfPrompt, viewPrompt } from "@/lib/server/prompts";
 import { analyst } from "@/lib/server/providers";
 import { PROVIDERS } from "@/lib/types";
-import type { BrandSelf, Gap, GapReport, LlmView, Provider } from "@/lib/types";
+import type { BrandSelf, Gap, GapReport, LlmView, Provider, Question, QuestionComparison } from "@/lib/types";
 
 export const maxDuration = 300;
 
@@ -72,6 +72,35 @@ export async function POST(req: Request) {
           competitors: strings(r.competitors),
         };
         return { view };
+      }
+      case "compare": {
+        const providers = providersIn(body.providers);
+        const fixed = list<Question>(body.questions);
+        const r = await run<any>(comparePrompt(body.self, str(body.positioningDoc), fixed, providers));
+        const rows = list<any>(r.questions);
+        const comparisons: QuestionComparison[] = fixed.map((q, i) => {
+          const row = rows.find((x) => Number(x?.n) === i + 1);
+          const brandStated = row ? row.brandStated !== false : false;
+          const llms: QuestionComparison["llms"] = {};
+          for (const p of providers) {
+            const e = row?.llms?.[p];
+            const answered = !!q.answers?.[p]?.ok;
+            // "n/a" is decided by the facts of the run, not left to the analyst.
+            const comparable = !!e && brandStated && answered;
+            llms[p] = {
+              similarity: comparable && ["high", "medium", "low"].includes(e.similarity) ? e.similarity : "n/a",
+              llmSays: answered ? str(e?.llmSays) : "",
+              note: !answered ? "No answer from this LLM." : str(e?.note) || (e ? "" : "The analyst did not score this answer."),
+            };
+          }
+          return {
+            questionId: q.id,
+            brandSays: (brandStated && str(row?.brandSays)) || "Not stated in the brand's material",
+            brandStated,
+            llms,
+          };
+        });
+        return { comparisons };
       }
       case "gaps": {
         const providers = providersIn(body.providers);
