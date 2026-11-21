@@ -134,6 +134,25 @@ export interface QuestionComparison {
   llms: Partial<Record<Provider, { similarity: Similarity; llmSays: string; note: string }>>;
 }
 
+/** An LLM's own answer to "is this claim true?". */
+export type Verdict = "true" | "false" | "unsure";
+
+export const VERDICT_LABEL: Record<Verdict, string> = { true: "True", false: "False", unsure: "Unsure" };
+
+export interface ClaimResult {
+  /** Absent when the LLM gave no usable answer; such results are left out of the score. */
+  verdict?: Verdict;
+  /** The LLM's explanation, or why there is no verdict. */
+  reason: string;
+  citations?: Citation[];
+}
+
+export interface ClaimCheck {
+  id: string;
+  claim: string;
+  results: Partial<Record<Provider, ClaimResult>>;
+}
+
 export interface Report {
   id: string;
   createdAt: string;
@@ -149,6 +168,8 @@ export interface Report {
   /** One entry per scored question, fixed and follow-up. */
   comparisons?: QuestionComparison[];
   gapReport?: GapReport;
+  /** Optional claims check: each brand-supplied claim, put to each LLM as true or false. */
+  claims?: ClaimCheck[];
   /** Non-fatal problems the reader should know about. */
   notes: string[];
 }
