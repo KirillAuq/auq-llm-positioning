@@ -1,9 +1,9 @@
 "use client";
 
 import { DEFAULT_SETTINGS } from "./defaults";
-import { PROVIDER_LABEL, PROVIDERS } from "./types";
+import { PROVIDER_LABEL, PROVIDERS, SIMILARITY_LABEL } from "./types";
 import type {
-  Answer, BrandSelf, GapReport, KeyName, LlmView, Provider, Question, Report, ScrapedPage, Settings,
+  Answer, BrandSelf, GapReport, KeyName, LlmView, Provider, Question, QuestionComparison, Report, ScrapedPage, Settings,
 } from "./types";
 
 const SETTINGS_KEY = "lpa.settings.v1";
@@ -99,7 +99,7 @@ export const STEPS: { id: StepId; label: string }[] = [
   { id: "fixed", label: "Ask the fixed questions" },
   { id: "generate", label: "Generate follow-up questions" },
   { id: "generated", label: "Ask the follow-up questions" },
-  { id: "analyze", label: "Summarise each LLM's view" },
+  { id: "analyze", label: "Summarise each LLM and score every question" },
   { id: "gaps", label: "Find the positioning gaps" },
 ];
 
@@ -231,19 +231,35 @@ export async function runAudit(
     }
   }
 
-  // 6. (a) per-LLM views, in parallel
+  // 6. (a) per-LLM views and the question-by-question comparison, in parallel
   const analyze = { brand: brandName, questions: report.questions, model: settings.models.deepinfra, auth };
   let done = 0;
-  const total = providers.length;
+  // Scored a few questions per call so the analyst's reply stays well inside its token budget.
+  const batches: Question[][] = [];
+  for (let i = 0; i < report.questions.length; i += 6) batches.push(report.questions.slice(i, i + 6));
+  const scored: QuestionComparison[][] = [];
+  const total = providers.length + batches.length;
   onProgress({ step: "analyze", detail: "", done, total });
   const tick = (detail: string) => onProgress({ step: "analyze", detail, done: ++done, total });
-  await Promise.all(
-    providers.map(async (p) => {
+  await Promise.all([
+    ...providers.map(async (p) => {
       const { view } = await api<{ view: LlmView }>("/api/analyze", { ...analyze, step: "view", provider: p });
       report.views[p] = view;
       tick(`${PROVIDER_LABEL[p]} summarised`);
     }),
-  );
+    // The rest of the report stands without this section, so a failed batch is a note, not a stop.
+    ...batches.map((batch, i) =>
+      api<{ comparisons: QuestionComparison[] }>("/api/analyze", {
+        ...analyze, step: "compare", questions: batch, self, positioningDoc: input.positioningDoc, providers,
+      })
+        .then(({ comparisons }) => { scored[i] = comparisons; })
+        .catch((err) => {
+          notes.push(`${batch.length} question(s) are missing from the question-by-question comparison, starting with "${batch[0].text}": ${err instanceof Error ? err.message : err}`);
+        })
+        .finally(() => tick(`Questions scored (${i + 1} of ${batches.length})`)),
+    ),
+  ]);
+  report.comparisons = scored.flat();
 
   // 7. (d) Brand vs LLMs
   onProgress({ step: "gaps", detail: settings.models.deepinfra, done: 0, total: 1 });
@@ -277,6 +293,20 @@ export function reportToMarkdown(r: Report): string {
       L.push(`**Why it matters:** ${gap.whyItMatters}`, "", `**Suggested fix:** ${gap.suggestedFix}`, "");
     });
     L.push("### Where the LLMs match the brand", bullets(g.aligned), "");
+  }
+
+  if (r.comparisons?.length) {
+    L.push("## Question by question: brand vs LLMs", "");
+    for (const c of r.comparisons) {
+      const q = r.questions.find((x) => x.id === c.questionId);
+      if (!q) continue;
+      L.push(`### ${q.text}`, "", q.kind === "generated" ? "_Follow-up question_" : "_Fixed question_", "", `**What the brand says:** ${c.brandSays}`, "");
+      for (const p of PROVIDERS) {
+        const e = c.llms[p];
+        if (e) L.push(`- **${PROVIDER_LABEL[p]}** (${SIMILARITY_LABEL[e.similarity]}): ${[e.llmSays, e.note].filter(Boolean).join(" — ")}`);
+      }
+      L.push("");
+    }
   }
 
   L.push("## How each LLM sees the brand", "");

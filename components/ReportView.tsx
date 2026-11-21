@@ -4,11 +4,17 @@ import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { reportToMarkdown } from "@/lib/client";
-import { PROVIDER_LABEL, PROVIDERS } from "@/lib/types";
-import type { Gap, Provider, Report, SourcedClaim } from "@/lib/types";
+import { PROVIDER_LABEL, PROVIDERS, SIMILARITY_LABEL } from "@/lib/types";
+import type { Gap, Provider, Question, QuestionComparison, Report, SourcedClaim, Similarity } from "@/lib/types";
 
 const DOT: Record<Provider, string> = { chatgpt: "bg-chatgpt", claude: "bg-claude", gemini: "bg-gemini" };
 const SEVERITY = { high: "text-high border-high", medium: "text-medium border-medium", low: "text-low border-low" };
+const SIMILARITY: Record<Similarity, string> = {
+  high: "text-chatgpt border-chatgpt",
+  medium: "text-medium border-medium",
+  low: "text-high border-high",
+  "n/a": "text-muted border-line",
+};
 const TYPE_LABEL: Record<Gap["type"], string> = {
   contradiction: "Contradicts the brand",
   omission: "Left out",
@@ -111,12 +117,58 @@ function GapCard({ gap, n }: { gap: Gap; n: number }) {
   );
 }
 
+function Kind() {
+  return <span className="ml-2 whitespace-nowrap rounded border border-line px-1.5 py-0.5 align-middle text-xs font-normal text-muted">Follow-up</span>;
+}
+
+function Badge({ level }: { level: Similarity }) {
+  return (
+    <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold ${SIMILARITY[level]}`}>
+      {SIMILARITY_LABEL[level]}
+    </span>
+  );
+}
+
+function ComparisonCard({ c, q, n, present }: { c: QuestionComparison; q: Question; n: number; present: Provider[] }) {
+  return (
+    <article className="card p-4 sm:p-5">
+      <h3 className="font-semibold">{n}. {q.text}{q.kind === "generated" && <Kind />}</h3>
+      <div className="mt-3 grid gap-4 md:grid-cols-[2fr_3fr]">
+        <div className="rounded-lg bg-bg p-3">
+          <div className="eyebrow">What the brand says</div>
+          <p className={`mt-1 text-sm ${c.brandStated ? "" : "text-muted"}`}>{c.brandSays}</p>
+        </div>
+        <div className="space-y-3">
+          {present.map((p) => {
+            const e = c.llms[p];
+            if (!e) return null;
+            return (
+              <div key={p} className="rounded-lg bg-bg p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <Llm p={p} />
+                  <Badge level={e.similarity} />
+                </div>
+                {e.llmSays && <p className="mt-2 text-sm">{e.llmSays}</p>}
+                {e.note && <p className="hint mt-1">{e.note}</p>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function ReportView({ report, onClose }: { report: Report; onClose: () => void }) {
   const [filter, setFilter] = useState<Provider | "all">("all");
   const present = PROVIDERS.filter((p) => report.views[p]);
   const g = report.gapReport;
   const gaps = (g?.gaps ?? []).filter((x) => filter === "all" || x.affected.includes(filter));
   const self = report.self;
+  const compared = (report.comparisons ?? []).flatMap((c) => {
+    const q = report.questions.find((x) => x.id === c.questionId);
+    return q ? [{ c, q }] : [];
+  });
   const cols = present.length === 3 ? "lg:grid-cols-3" : present.length === 2 ? "lg:grid-cols-2" : "";
 
   const download = () => {
@@ -149,7 +201,8 @@ export default function ReportView({ report, onClose }: { report: Report; onClos
           </div>
         </div>
         <nav className="no-print mt-5 flex flex-wrap gap-x-5 gap-y-1 border-y border-line py-2 text-sm text-muted">
-          <a href="#gaps" className="hover:text-ink">Brand vs LLMs</a>
+          {compared.length > 0 && <a href="#questions" className="hover:text-ink">Question by question</a>}
+          <a href="#gaps" className="hover:text-ink">Positioning gaps</a>
           <a href="#views" className="hover:text-ink">Each LLM&apos;s view</a>
           <a href="#self" className="hover:text-ink">Brand&apos;s own description</a>
           <a href="#raw" className="hover:text-ink">Questions &amp; answers</a>
@@ -161,6 +214,33 @@ export default function ReportView({ report, onClose }: { report: Report; onClos
           </div>
         )}
       </div>
+
+      {compared.length > 0 && (
+        <Section id="questions" eyebrow="Question by question" title="How close each LLM is to the brand's own answer"
+          intro="For every question asked, fixed and follow-up: the answer the brand's own material gives, and how similar each LLM's answer is to it. Similarity is about substance and emphasis, not wording. Where the brand's material doesn't answer a question, there is nothing to compare against.">
+          <div className="card overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-line">
+                  <th className="p-3 font-medium text-muted">Question</th>
+                  {present.map((p) => <th key={p} className="p-3"><Llm p={p} /></th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {compared.map(({ c, q }, i) => (
+                  <tr key={c.questionId} className="border-b border-line last:border-0">
+                    <td className="p-3">{i + 1}. {q.text}{q.kind === "generated" && <Kind />}</td>
+                    {present.map((p) => <td key={p} className="p-3">{c.llms[p] && <Badge level={c.llms[p]!.similarity} />}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-4 space-y-4">
+            {compared.map(({ c, q }, i) => <ComparisonCard key={c.questionId} c={c} q={q} n={i + 1} present={present} />)}
+          </div>
+        </Section>
+      )}
 
       {g && (
         <Section id="gaps" eyebrow="The main finding" title="Where the LLMs diverge from the brand's positioning"

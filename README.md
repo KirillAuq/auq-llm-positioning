@@ -9,6 +9,7 @@ Finds the gap between how a SaaS brand describes itself and how ChatGPT, Claude 
 3. **Asks each LLM the fixed questions** (editable in Settings; `[brand]` is replaced with the brand name).
 4. **Generates follow-up questions** from what the LLMs answered, and asks those too.
 5. **Builds the report:**
+   - Question by question: what the brand says for each question (fixed and follow-up), and how similar each LLM's answer is (high, medium, low)
    - Brand vs LLMs: every gap, with both sides quoted, severity, and a suggested fix
    - How each LLM sees the brand
    - How the brand describes itself, with a source for every claim
