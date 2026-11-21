@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { reportToMarkdown } from "@/lib/client";
-import { PROVIDER_LABEL, PROVIDERS, SIMILARITY_LABEL } from "@/lib/types";
-import type { Gap, Provider, Question, QuestionComparison, Report, SourcedClaim, Similarity } from "@/lib/types";
+import { claimScore, reportToMarkdown } from "@/lib/client";
+import type { ClaimScore } from "@/lib/client";
+import { PROVIDER_LABEL, PROVIDERS, SIMILARITY_LABEL, VERDICT_LABEL } from "@/lib/types";
+import type { ClaimCheck, ClaimResult, Gap, Provider, Question, QuestionComparison, Report, SourcedClaim, Similarity } from "@/lib/types";
 
 const DOT: Record<Provider, string> = { chatgpt: "bg-chatgpt", claude: "bg-claude", gemini: "bg-gemini" };
 const SEVERITY = { high: "text-high border-high", medium: "text-medium border-medium", low: "text-low border-low" };
@@ -117,6 +118,84 @@ function GapCard({ gap, n }: { gap: Gap; n: number }) {
   );
 }
 
+const VERDICT = { true: "text-chatgpt border-chatgpt", false: "text-high border-high", unsure: "text-medium border-medium" };
+
+function VerdictBadge({ r }: { r?: ClaimResult }) {
+  return (
+    <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold ${r?.verdict ? VERDICT[r.verdict] : "border-line text-muted"}`}>
+      {r?.verdict ? VERDICT_LABEL[r.verdict] : "No answer"}
+    </span>
+  );
+}
+
+function ScoreTile({ label, s, big }: { label: React.ReactNode; s: ClaimScore; big?: boolean }) {
+  return (
+    <div className="card p-4">
+      <div className="text-sm">{label}</div>
+      <div className={`mt-1 font-semibold tracking-tight ${big ? "text-4xl" : "text-2xl"}`}>{s.pct === null ? "–" : `${s.pct}%`}</div>
+      <p className="hint mt-1">
+        {s.answered ? `${s.confirmed} of ${s.answered} confirmed · ${s.denied} false · ${s.unsure} unsure` : "No answers"}
+      </p>
+    </div>
+  );
+}
+
+function ClaimsSection({ claims }: { claims: ClaimCheck[] }) {
+  const asked = PROVIDERS.filter((p) => claims.some((c) => c.results[p]));
+  const cols = asked.length === 3 ? "md:grid-cols-3" : asked.length === 2 ? "md:grid-cols-2" : "";
+  return (
+    <Section id="claims" eyebrow="Claims check" title="Do the LLMs confirm the brand's claims?"
+      intro="Each claim was put to each LLM as a direct true/false question, and the verdict is the LLM's own first word. True means the LLM confirms the claim, not that the claim has been verified. The score is the share of answered checks that came back True.">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <ScoreTile big label={<span className="font-medium">Overall score</span>} s={claimScore(claims)} />
+        {asked.map((p) => <ScoreTile key={p} label={<Llm p={p} />} s={claimScore(claims, p)} />)}
+      </div>
+      <div className="card mt-4 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-line">
+              <th className="p-3 font-medium text-muted">Claim</th>
+              {asked.map((p) => <th key={p} className="p-3"><Llm p={p} /></th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {claims.map((c, i) => (
+              <tr key={c.id} className="border-b border-line last:border-0">
+                <td className="p-3">{i + 1}. {c.claim}</td>
+                {asked.map((p) => <td key={p} className="p-3"><VerdictBadge r={c.results[p]} /></td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 space-y-4">
+        {claims.map((c, i) => (
+          <article key={c.id} className="card p-4 sm:p-5">
+            <h3 className="font-semibold">{i + 1}. {c.claim}</h3>
+            <div className={`mt-3 grid gap-3 ${cols}`}>
+              {asked.map((p) => {
+                const r = c.results[p];
+                return (
+                  <div key={p} className="min-w-0 rounded-lg bg-bg p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><Llm p={p} /><VerdictBadge r={r} /></div>
+                    {r?.reason && <p className="mt-2 text-sm [overflow-wrap:anywhere]">{r.reason}</p>}
+                    {!!r?.citations?.length && (
+                      <div className="hint mt-2">
+                        Sources:{" "}
+                        {r.citations.map((s, j) => <a key={j} href={s.url} target="_blank" rel="noreferrer" className="mr-2 underline">{s.title || s.url}</a>)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </article>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
 function Kind() {
   return <span className="ml-2 whitespace-nowrap rounded border border-line px-1.5 py-0.5 align-middle text-xs font-normal text-muted">Follow-up</span>;
 }
@@ -161,6 +240,11 @@ function ComparisonCard({ c, q, n, present }: { c: QuestionComparison; q: Questi
 
 export default function ReportView({ report, onClose }: { report: Report; onClose: () => void }) {
   const [filter, setFilter] = useState<Provider | "all">("all");
+  const [tab, setTab] = useState<"positioning" | "claims">("positioning");
+  const claims = report.claims ?? [];
+  const claimsPct = claimScore(claims).pct;
+  // Print and PDF always carry both tabs.
+  const pane = (id: typeof tab) => (tab === id || !claims.length ? "" : "hidden print:block");
   const present = PROVIDERS.filter((p) => report.views[p]);
   const g = report.gapReport;
   const gaps = (g?.gaps ?? []).filter((x) => filter === "all" || x.affected.includes(filter));
@@ -200,7 +284,17 @@ export default function ReportView({ report, onClose }: { report: Report; onClos
             <button className="btn btn-primary" onClick={onClose}>New audit</button>
           </div>
         </div>
-        <nav className="no-print mt-5 flex flex-wrap gap-x-5 gap-y-1 border-y border-line py-2 text-sm text-muted">
+        {claims.length > 0 && (
+          <div role="tablist" aria-label="Report sections" className="no-print mt-5 flex gap-1 border-b border-line">
+            {([["positioning", "Positioning"], ["claims", `Claims check${claimsPct === null ? "" : ` · ${claimsPct}%`}`]] as const).map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+                className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${tab === id ? "border-accent text-accent" : "border-transparent text-muted hover:text-ink"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <nav hidden={tab === "claims" && claims.length > 0} className="no-print mt-5 flex flex-wrap gap-x-5 gap-y-1 border-y border-line py-2 text-sm text-muted">
           {compared.length > 0 && <a href="#questions" className="hover:text-ink">Question by question</a>}
           <a href="#gaps" className="hover:text-ink">Positioning gaps</a>
           <a href="#views" className="hover:text-ink">Each LLM&apos;s view</a>
@@ -215,6 +309,9 @@ export default function ReportView({ report, onClose }: { report: Report; onClos
         )}
       </div>
 
+      {claims.length > 0 && <div className={pane("claims")}><ClaimsSection claims={claims} /></div>}
+
+      <div className={`space-y-12 ${pane("positioning")}`}>
       {compared.length > 0 && (
         <Section id="questions" eyebrow="Question by question" title="How close each LLM is to the brand's own answer"
           intro="For every question asked, fixed and follow-up: the answer the brand's own material gives, and how similar each LLM's answer is to it. Similarity is about substance and emphasis, not wording. Where the brand's material doesn't answer a question, there is nothing to compare against.">
@@ -374,6 +471,7 @@ export default function ReportView({ report, onClose }: { report: Report; onClos
           ))}
         </div>
       </Section>
+      </div>
     </div>
   );
 }

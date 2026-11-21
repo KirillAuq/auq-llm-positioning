@@ -34,5 +34,7 @@ export const ENV_VAR: Record<keyof Settings["keys"], string> = {
 };
 
 export const MAX_URLS = 5;
+export const MAX_CLAIMS = 25;
+export const MAX_CLAIM_CHARS = 400;
 /** Per-page cap on extracted text. Anything cut is flagged in the report, never silent. */
 export const MAX_PAGE_CHARS = 60_000;

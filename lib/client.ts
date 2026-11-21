@@ -1,9 +1,9 @@
 "use client";
 
-import { DEFAULT_SETTINGS } from "./defaults";
-import { PROVIDER_LABEL, PROVIDERS, SIMILARITY_LABEL } from "./types";
+import { DEFAULT_SETTINGS, MAX_CLAIM_CHARS, MAX_CLAIMS } from "./defaults";
+import { PROVIDER_LABEL, PROVIDERS, SIMILARITY_LABEL, VERDICT_LABEL } from "./types";
 import type {
-  Answer, BrandSelf, GapReport, KeyName, LlmView, Provider, Question, QuestionComparison, Report, ScrapedPage, Settings,
+  Answer, BrandSelf, ClaimCheck, ClaimResult, GapReport, KeyName, LlmView, Provider, Question, QuestionComparison, Report, ScrapedPage, Settings,
 } from "./types";
 
 const SETTINGS_KEY = "lpa.settings.v1";
@@ -85,7 +85,7 @@ export function domainOf(url: string) {
   }
 }
 
-export type StepId = "scrape" | "self" | "fixed" | "generate" | "generated" | "analyze" | "gaps";
+export type StepId = "scrape" | "self" | "fixed" | "generate" | "generated" | "claims" | "analyze" | "gaps";
 export interface Progress {
   step: StepId;
   detail: string;
@@ -99,6 +99,7 @@ export const STEPS: { id: StepId; label: string }[] = [
   { id: "fixed", label: "Ask the fixed questions" },
   { id: "generate", label: "Generate follow-up questions" },
   { id: "generated", label: "Ask the follow-up questions" },
+  { id: "claims", label: "Check the brand's claims" },
   { id: "analyze", label: "Summarise each LLM and score every question" },
   { id: "gaps", label: "Find the positioning gaps" },
 ];
@@ -116,6 +117,54 @@ export interface AuditInput {
   urls: string[];
   positioningDoc: string;
   brandHint: string;
+  /** Optional. Statements the brand believes about itself, each put to every LLM as true or false. */
+  claims: string[];
+}
+
+/** One claim per line; bullets and numbering are stripped, duplicates and blanks dropped. */
+export function parseClaims(text: string): string[] {
+  const seen = new Set<string>();
+  return text
+    .split("\n")
+    .map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").trim().slice(0, MAX_CLAIM_CHARS))
+    .filter((l) => l && !seen.has(l.toLowerCase()) && seen.add(l.toLowerCase()))
+    .slice(0, MAX_CLAIMS);
+}
+
+const claimQuestion = (brand: string, claim: string) =>
+  `Here is a statement about ${brand}:
+
+"${claim}"
+
+From what you know, is this statement true? Start your reply with exactly one word on its own line: TRUE, FALSE or UNSURE. Use UNSURE if you do not know the brand well enough or cannot tell; do not guess. Use FALSE if any part of the statement is wrong. Then explain in one or two sentences.`;
+
+/** The verdict is the LLM's own first word, read as-is, so no other model interprets the answer. */
+export function readVerdict(answer: Answer): ClaimResult {
+  if (!answer.ok || !answer.text) return { reason: `No answer: ${answer.error ?? "empty reply"}` };
+  const lines = answer.text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const m = /^[\s*_#>"'`]*(true|false|unsure)\b[\s*_"'`.:,;—–-]*/i.exec(lines[0] ?? "");
+  if (!m) return { reason: `No verdict: the reply did not start with TRUE, FALSE or UNSURE. It said: ${answer.text}`, citations: answer.citations };
+  const rest = [lines[0].slice(m[0].length), ...lines.slice(1)].join(" ").trim();
+  return { verdict: m[1].toLowerCase() as ClaimResult["verdict"], reason: rest, citations: answer.citations };
+}
+
+export interface ClaimScore { confirmed: number; denied: number; unsure: number; answered: number; pct: number | null }
+
+/** Share of answered checks where the LLM said TRUE. Pass a provider for that LLM's score alone. */
+export function claimScore(claims: ClaimCheck[], provider?: Provider): ClaimScore {
+  const s: ClaimScore = { confirmed: 0, denied: 0, unsure: 0, answered: 0, pct: null };
+  for (const c of claims) {
+    for (const p of provider ? [provider] : PROVIDERS) {
+      const v = c.results[p]?.verdict;
+      if (!v) continue;
+      s.answered++;
+      if (v === "true") s.confirmed++;
+      else if (v === "false") s.denied++;
+      else s.unsure++;
+    }
+  }
+  s.pct = s.answered ? Math.round((s.confirmed / s.answered) * 100) : null;
+  return s;
 }
 
 /**
@@ -231,6 +280,27 @@ export async function runAudit(
     }
   }
 
+  // Optional claims check: each claim goes to each LLM as a direct true/false question.
+  if (input.claims.length) {
+    const checks: ClaimCheck[] = input.claims.map((claim, i) => ({ id: `c${i}`, claim, results: {} }));
+    const jobs = checks.flatMap((c) => providers.map((p) => ({ c, p })));
+    let asked = 0;
+    onProgress({ step: "claims", detail: "", done: asked, total: jobs.length });
+    await pool(jobs, 6, async ({ c, p }) => {
+      let answer: Answer;
+      try {
+        answer = await api<Answer>("/api/ask", {
+          provider: p, question: claimQuestion(brandInQuestion, c.claim), model: settings.models[p], webSearch: settings.webSearch, auth,
+        });
+      } catch (err) {
+        answer = { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+      c.results[p] = readVerdict(answer);
+      onProgress({ step: "claims", detail: `${PROVIDER_LABEL[p]}: ${c.claim}`, done: ++asked, total: jobs.length });
+    });
+    report.claims = checks;
+  }
+
   // 6. (a) per-LLM views and the question-by-question comparison, in parallel
   const analyze = { brand: brandName, questions: report.questions, model: settings.models.deepinfra, auth };
   let done = 0;
@@ -293,6 +363,23 @@ export function reportToMarkdown(r: Report): string {
       L.push(`**Why it matters:** ${gap.whyItMatters}`, "", `**Suggested fix:** ${gap.suggestedFix}`, "");
     });
     L.push("### Where the LLMs match the brand", bullets(g.aligned), "");
+  }
+
+  if (r.claims?.length) {
+    const fmt = (s: ClaimScore) => (s.pct === null ? "no answers" : `${s.pct}% (${s.confirmed} of ${s.answered} confirmed, ${s.denied} false, ${s.unsure} unsure)`);
+    const asked = PROVIDERS.filter((p) => r.claims!.some((c) => c.results[p]));
+    L.push("## Claims check", "", "_Each claim was put to each LLM as a direct true/false question. \"True\" means the LLM confirms the claim, not that it has been verified._", "");
+    L.push(`**Overall score:** ${fmt(claimScore(r.claims))}`, "");
+    for (const p of asked) L.push(`- **${PROVIDER_LABEL[p]}:** ${fmt(claimScore(r.claims, p))}`);
+    L.push("", `| Claim | ${asked.map((p) => PROVIDER_LABEL[p]).join(" | ")} |`, `| --- | ${asked.map(() => "---").join(" | ")} |`);
+    const cell = (x?: ClaimResult) => (x?.verdict ? VERDICT_LABEL[x.verdict] : "No answer");
+    for (const c of r.claims) L.push(`| ${c.claim.replace(/\|/g, "\\|")} | ${asked.map((p) => cell(c.results[p])).join(" | ")} |`);
+    L.push("");
+    for (const c of r.claims) {
+      L.push(`### ${c.claim}`, "");
+      for (const p of asked) L.push(`- **${PROVIDER_LABEL[p]}** (${cell(c.results[p])}): ${c.results[p]?.reason ?? ""}`);
+      L.push("");
+    }
   }
 
   if (r.comparisons?.length) {

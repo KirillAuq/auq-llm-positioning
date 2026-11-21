@@ -8,7 +8,8 @@ Finds the gap between how a SaaS brand describes itself and how ChatGPT, Claude 
 2. **Reads the brand's material** and extracts how the brand describes itself, using only those URLs and the doc.
 3. **Asks each LLM the fixed questions** (editable in Settings; `[brand]` is replaced with the brand name).
 4. **Generates follow-up questions** from what the LLMs answered, and asks those too.
-5. **Builds the report:**
+5. **Checks claims (optional):** on the intake's Claims check tab, list specific claims the brand makes about itself. Each one is put to every LLM as a direct true/false question, and the report gives a score: the share of answers that came back True.
+6. **Builds the report:**
    - Question by question: what the brand says for each question (fixed and follow-up), and how similar each LLM's answer is (high, medium, low)
    - Brand vs LLMs: every gap, with both sides quoted, severity, and a suggested fix
    - How each LLM sees the brand
