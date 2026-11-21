@@ -148,6 +148,10 @@ function parseJson(raw: string): unknown {
 /** One analyst call on DeepInfra. Returns parsed JSON; retries once if the reply isn't valid JSON. */
 export async function analyst<T>(key: string, model: string, system: string, user: string): Promise<T> {
   let lastError = "";
+  // Reasoning models spend the same token budget on thinking as on the reply, and a
+  // long think can leave no room for the JSON. Keep thinking light, and switch it off
+  // for the retry. Models without reasoning ignore the setting.
+  let effort = "low";
   for (let attempt = 0; attempt < 2; attempt++) {
     const json = await postJson(
       "https://api.deepinfra.com/v1/openai/chat/completions",
@@ -155,7 +159,8 @@ export async function analyst<T>(key: string, model: string, system: string, use
       {
         model,
         temperature: 0.2,
-        max_tokens: 16000,
+        max_tokens: 24000,
+        reasoning_effort: effort,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: system },
@@ -166,12 +171,14 @@ export async function analyst<T>(key: string, model: string, system: string, use
     const choice = json.choices?.[0];
     if (choice?.finish_reason === "length") {
       lastError = "the reply was cut off at the token limit";
+      effort = "none";
       continue;
     }
     try {
       return parseJson(choice?.message?.content ?? "") as T;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
+      effort = "none";
     }
   }
   throw new HttpError(502, `The analyst model (${model}) did not return usable JSON: ${lastError}`);
