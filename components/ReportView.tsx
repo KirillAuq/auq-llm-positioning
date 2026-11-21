@@ -151,7 +151,6 @@ export default function ReportView({ report, onClose }: { report: Report; onClos
         <nav className="no-print mt-5 flex flex-wrap gap-x-5 gap-y-1 border-y border-line py-2 text-sm text-muted">
           <a href="#gaps" className="hover:text-ink">Brand vs LLMs</a>
           <a href="#views" className="hover:text-ink">Each LLM&apos;s view</a>
-          <a href="#diff" className="hover:text-ink">LLM differences</a>
           <a href="#self" className="hover:text-ink">Brand&apos;s own description</a>
           <a href="#raw" className="hover:text-ink">Questions &amp; answers</a>
         </nav>
@@ -224,33 +223,6 @@ export default function ReportView({ report, onClose }: { report: Report; onClos
           })}
         </div>
       </Section>
-
-      {report.diff && (
-        <Section id="diff" eyebrow="Model vs model" title="Differences between the LLMs"
-          intro="Substantive disagreements only. Differences of wording and length are ignored.">
-          {report.diff.consensus.length > 0 && (
-            <div className="card mb-4 p-4"><List title="All of them agree that" items={report.diff.consensus} /></div>
-          )}
-          <div className="card overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-line align-bottom">
-                  <th className="w-1/5 p-3 font-medium text-muted">Topic</th>
-                  {PROVIDERS.map((p) => <th key={p} className="p-3"><Llm p={p} /></th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {report.diff.differences.map((d, i) => (
-                  <tr key={i} className="border-b border-line align-top last:border-0">
-                    <td className="p-3"><div className="font-medium">{d.topic}</div><div className="hint mt-1">{d.note}</div></td>
-                    {PROVIDERS.map((p) => <td key={p} className="p-3">{d[p]}</td>)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Section>
-      )}
 
       {self && (
         <Section id="self" eyebrow="The reference" title="How the brand describes itself"

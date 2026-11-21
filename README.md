@@ -11,7 +11,6 @@ Finds the gap between how a SaaS brand describes itself and how ChatGPT, Claude 
 5. **Builds the report:**
    - Brand vs LLMs: every gap, with both sides quoted, severity, and a suggested fix
    - How each LLM sees the brand
-   - Differences between the LLMs
    - How the brand describes itself, with a source for every claim
    - All questions and raw answers
 

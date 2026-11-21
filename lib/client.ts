@@ -3,7 +3,7 @@
 import { DEFAULT_SETTINGS } from "./defaults";
 import { PROVIDER_LABEL, PROVIDERS } from "./types";
 import type {
-  Answer, BrandSelf, GapReport, KeyName, LlmDiff, LlmView, Provider, Question, Report, ScrapedPage, Settings,
+  Answer, BrandSelf, GapReport, KeyName, LlmView, Provider, Question, Report, ScrapedPage, Settings,
 } from "./types";
 
 const SETTINGS_KEY = "lpa.settings.v1";
@@ -99,7 +99,7 @@ export const STEPS: { id: StepId; label: string }[] = [
   { id: "fixed", label: "Ask the fixed questions" },
   { id: "generate", label: "Generate follow-up questions" },
   { id: "generated", label: "Ask the follow-up questions" },
-  { id: "analyze", label: "Summarise and compare the LLMs" },
+  { id: "analyze", label: "Summarise each LLM's view" },
   { id: "gaps", label: "Find the positioning gaps" },
 ];
 
@@ -231,25 +231,19 @@ export async function runAudit(
     }
   }
 
-  // 6. (a) per-LLM views and (b) differences, in parallel
+  // 6. (a) per-LLM views, in parallel
   const analyze = { brand: brandName, questions: report.questions, model: settings.models.deepinfra, auth };
   let done = 0;
-  const total = providers.length + (providers.length > 1 ? 1 : 0);
+  const total = providers.length;
   onProgress({ step: "analyze", detail: "", done, total });
   const tick = (detail: string) => onProgress({ step: "analyze", detail, done: ++done, total });
-  await Promise.all([
-    ...providers.map(async (p) => {
+  await Promise.all(
+    providers.map(async (p) => {
       const { view } = await api<{ view: LlmView }>("/api/analyze", { ...analyze, step: "view", provider: p });
       report.views[p] = view;
       tick(`${PROVIDER_LABEL[p]} summarised`);
     }),
-    providers.length > 1
-      ? api<{ diff: LlmDiff }>("/api/analyze", { ...analyze, step: "diff", providers }).then(({ diff }) => {
-          report.diff = diff;
-          tick("Differences mapped");
-        })
-      : Promise.resolve(),
-  ]);
+  );
 
   // 7. (d) Brand vs LLMs
   onProgress({ step: "gaps", detail: settings.models.deepinfra, done: 0, total: 1 });
@@ -295,15 +289,6 @@ export function reportToMarkdown(r: Report): string {
     ];
     for (const [label, items] of rows) L.push(`- **${label}:** ${items.join("; ") || "none given"}`);
     L.push("");
-  }
-
-  if (r.diff) {
-    L.push("## Differences between the LLMs", "", "**They agree on:**", bullets(r.diff.consensus), "");
-    for (const d of r.diff.differences) {
-      L.push(`### ${d.topic}`, "", d.note, "");
-      for (const p of PROVIDERS) L.push(`- **${PROVIDER_LABEL[p]}:** ${d[p]}`);
-      L.push("");
-    }
   }
 
   if (r.self) {
