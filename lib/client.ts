@@ -136,7 +136,7 @@ const claimQuestion = (brand: string, claim: string) =>
 
 "${claim}"
 
-From what you know, is this statement true? Start your reply with exactly one word on its own line: TRUE, FALSE or UNSURE. Use UNSURE if you do not know the brand well enough or cannot tell; do not guess. Use FALSE if any part of the statement is wrong. Then explain in one or two sentences.`;
+From what you know, is this statement true? Start your reply with exactly one word on its own line: TRUE, FALSE or UNSURE. Use UNSURE if you do not know the brand well enough or cannot tell; do not guess. Use FALSE if any part of the statement is wrong. Then give your reason in no more than two sentences.`;
 
 /** The verdict is the LLM's own first word, read as-is, so no other model interprets the answer. */
 export function readVerdict(answer: Answer): ClaimResult {
