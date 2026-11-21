@@ -75,10 +75,10 @@ export async function POST(req: Request) {
       }
       case "compare": {
         const providers = providersIn(body.providers);
-        const fixed = list<Question>(body.questions);
-        const r = await run<any>(comparePrompt(body.self, str(body.positioningDoc), fixed, providers));
+        const asked = list<Question>(body.questions);
+        const r = await run<any>(comparePrompt(body.self, str(body.positioningDoc), asked, providers));
         const rows = list<any>(r.questions);
-        const comparisons: QuestionComparison[] = fixed.map((q, i) => {
+        const comparisons: QuestionComparison[] = asked.map((q, i) => {
           const row = rows.find((x) => Number(x?.n) === i + 1);
           const brandStated = row ? row.brandStated !== false : false;
           const llms: QuestionComparison["llms"] = {};

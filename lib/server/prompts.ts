@@ -108,8 +108,8 @@ Schema:
   return { system, user };
 }
 
-/** Per fixed question: the brand's own answer, and how close each LLM's answer is to it. */
-export function comparePrompt(self: BrandSelf, positioningDoc: string, fixed: Question[], providers: Provider[]) {
+/** Per question (fixed and follow-up): the brand's own answer, and how close each LLM's answer is to it. */
+export function comparePrompt(self: BrandSelf, positioningDoc: string, questions: Question[], providers: Provider[]) {
   const system = `You score, question by question, how closely AI assistants' answers about a SaaS brand match the brand's own answer. The reader is the brand's marketing team.
 
 You are given:
@@ -156,7 +156,7 @@ ${positioningDoc.trim() || "(none provided)"}
 </brand_self>
 
 <transcript>
-${transcript(fixed, providers)}
+${transcript(questions, providers)}
 </transcript>`;
   return { system, user };
 }

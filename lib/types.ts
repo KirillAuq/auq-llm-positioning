@@ -146,7 +146,7 @@ export interface Report {
   self?: BrandSelf;
   questions: Question[];
   views: Partial<Record<Provider, LlmView>>;
-  /** One entry per fixed question. */
+  /** One entry per scored question, fixed and follow-up. */
   comparisons?: QuestionComparison[];
   gapReport?: GapReport;
   /** Non-fatal problems the reader should know about. */

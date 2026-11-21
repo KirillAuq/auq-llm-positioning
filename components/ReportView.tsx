@@ -117,6 +117,10 @@ function GapCard({ gap, n }: { gap: Gap; n: number }) {
   );
 }
 
+function Kind() {
+  return <span className="ml-2 whitespace-nowrap rounded border border-line px-1.5 py-0.5 align-middle text-xs font-normal text-muted">Follow-up</span>;
+}
+
 function Badge({ level }: { level: Similarity }) {
   return (
     <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold ${SIMILARITY[level]}`}>
@@ -128,7 +132,7 @@ function Badge({ level }: { level: Similarity }) {
 function ComparisonCard({ c, q, n, present }: { c: QuestionComparison; q: Question; n: number; present: Provider[] }) {
   return (
     <article className="card p-4 sm:p-5">
-      <h3 className="font-semibold">{n}. {q.text}</h3>
+      <h3 className="font-semibold">{n}. {q.text}{q.kind === "generated" && <Kind />}</h3>
       <div className="mt-3 grid gap-4 md:grid-cols-[2fr_3fr]">
         <div className="rounded-lg bg-bg p-3">
           <div className="eyebrow">What the brand says</div>
@@ -213,7 +217,7 @@ export default function ReportView({ report, onClose }: { report: Report; onClos
 
       {compared.length > 0 && (
         <Section id="questions" eyebrow="Question by question" title="How close each LLM is to the brand's own answer"
-          intro="For each fixed question: the answer the brand's own material gives, and how similar each LLM's answer is to it. Similarity is about substance and emphasis, not wording.">
+          intro="For every question asked, fixed and follow-up: the answer the brand's own material gives, and how similar each LLM's answer is to it. Similarity is about substance and emphasis, not wording. Where the brand's material doesn't answer a question, there is nothing to compare against.">
           <div className="card overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
@@ -225,7 +229,7 @@ export default function ReportView({ report, onClose }: { report: Report; onClos
               <tbody>
                 {compared.map(({ c, q }, i) => (
                   <tr key={c.questionId} className="border-b border-line last:border-0">
-                    <td className="p-3">{i + 1}. {q.text}</td>
+                    <td className="p-3">{i + 1}. {q.text}{q.kind === "generated" && <Kind />}</td>
                     {present.map((p) => <td key={p} className="p-3">{c.llms[p] && <Badge level={c.llms[p]!.similarity} />}</td>)}
                   </tr>
                 ))}
