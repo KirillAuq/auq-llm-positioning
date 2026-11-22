@@ -51,7 +51,7 @@ function Reports() {
   const selected = clients.find((c) => c.id === filter);
   const tab = (id: string, label: string, n: number) => (
     <button key={id} onClick={() => setFilter(id)}
-      className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm ${filter === id ? "bg-surface font-medium ring-1 ring-line" : "text-muted hover:text-ink"}`}>
+      className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm ${filter === id ? "border-l-2 border-accent bg-surface font-medium" : "border-l-2 border-transparent text-muted hover:text-ink"}`}>
       <span className="truncate">{label}</span><span className="hint">{n}</span>
     </button>
   );
@@ -74,7 +74,7 @@ function Reports() {
 
       <div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{selected?.name ?? (filter === NONE ? "No client" : "All reports")}</h1>
+          <h1 className="display-md">{selected?.name ?? (filter === NONE ? "No client" : "All reports")}</h1>
           {selected && (
             <div className="flex gap-2">
               <button className="btn" onClick={() => {

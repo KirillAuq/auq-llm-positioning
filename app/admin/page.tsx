@@ -144,7 +144,7 @@ function Admin() {
   const [tab, setTab] = useState<"leads" | "team">("leads");
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
+      <h1 className="display-md">Admin</h1>
       <div role="tablist" className="mt-4 flex gap-1 border-b border-line">
         {([["leads", "Visitor audits"], ["team", "Team"]] as const).map(([id, label]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}

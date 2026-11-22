@@ -31,7 +31,7 @@ export default function LoginPage() {
   if (!enabled) {
     return (
       <div className="mx-auto max-w-sm">
-        <h1 className="text-2xl font-semibold tracking-tight">Log in</h1>
+        <h1 className="display-md">Log in</h1>
         <p className="mt-2 text-sm text-muted">Accounts are not set up on this deployment yet.</p>
       </div>
     );
@@ -42,7 +42,7 @@ export default function LoginPage() {
       <form className="mx-auto max-w-sm space-y-4"
         onSubmit={(e) => { e.preventDefault(); run(async () => { await changePassword(password); setPassword(""); setDone("Password changed."); }); }}>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Your account</h1>
+          <h1 className="display-md">Your account</h1>
           <p className="mt-2 text-sm text-muted">Signed in as {user.email} ({user.role === "admin" ? "admin" : "team"}).</p>
         </div>
         <div className="card space-y-3 p-5">
@@ -62,7 +62,7 @@ export default function LoginPage() {
     <form className="mx-auto max-w-sm space-y-4"
       onSubmit={(e) => { e.preventDefault(); run(async () => { await signIn(email, password); router.push("/"); }); }}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Team log in</h1>
+        <h1 className="display-md">Team log in</h1>
         <p className="mt-2 text-sm text-muted">For team members. You don&apos;t need an account to run an audit.</p>
       </div>
       <div className="card space-y-3 p-5">

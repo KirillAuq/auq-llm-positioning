@@ -6,10 +6,10 @@ import { useAuth } from "@/lib/auth";
 export default function Header() {
   const { ready, enabled, user, signOut } = useAuth();
   return (
-    <header className="no-print border-b border-line bg-surface">
+    <header className="no-print border-b border-line bg-bg">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3">
-        <Link href="/" className="font-semibold tracking-tight">LLM Positioning Audit</Link>
-        <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+        <Link href="/" className="text-[15px] font-medium tracking-[-0.01em]">LLM Positioning Audit</Link>
+        <nav className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm font-medium text-body">
           <Link href="/" className="hover:text-ink">Audit</Link>
           {user && <Link href="/reports" className="hover:text-ink">Reports</Link>}
           {user?.role === "admin" && <Link href="/admin" className="hover:text-ink">Admin</Link>}

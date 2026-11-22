@@ -95,7 +95,7 @@ function SettingsForm() {
     <div className="mx-auto max-w-3xl space-y-8">
       <div className="sticky top-0 z-10 -mx-4 flex flex-wrap items-end justify-between gap-3 border-b border-line bg-bg px-4 py-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <h1 className="display-md">Settings</h1>
           <p className="mt-1 text-sm text-muted">These apply to every audit, for the team and for visitors.</p>
         </div>
         <div className="flex items-center gap-3">
