@@ -20,7 +20,7 @@ export const DEFAULT_SETTINGS: Settings = {
     // being audited, so no model grades its own answers.
     deepinfra: "zai-org/GLM-5.2",
   },
-  webSearch: false,
+  webSearch: true,
   includeDomain: true,
   keys: { chatgpt: "", claude: "", gemini: "", deepinfra: "" },
   appPassword: "",

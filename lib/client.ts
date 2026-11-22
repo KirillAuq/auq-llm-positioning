@@ -9,10 +9,14 @@ import type {
 const SETTINGS_KEY = "lpa.settings.v1";
 const REPORTS_KEY = "lpa.reports.v1";
 const MAX_SAVED = 15;
+const DEFAULTS_VERSION = 2;
 
 export function loadSettings(): Settings {
   try {
-    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}");
+    const { defaultsVersion, ...saved } = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}");
+    // Web search became on-by-default in version 2. Settings saved before that hold the old
+    // default rather than a choice, so let the new default through once.
+    if ((defaultsVersion ?? 1) < DEFAULTS_VERSION) delete saved.webSearch;
     return {
       ...DEFAULT_SETTINGS,
       ...saved,
@@ -25,7 +29,7 @@ export function loadSettings(): Settings {
 }
 
 export function saveSettings(s: Settings) {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...s, defaultsVersion: DEFAULTS_VERSION }));
 }
 
 export function loadReports(): Report[] {

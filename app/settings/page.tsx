@@ -109,8 +109,8 @@ export default function SettingsPage() {
           <span>
             <span className="font-medium">Let the LLMs search the web</span>
             <span className="hint block">
-              Off measures what each model learned in training. On is closer to what people see in the consumer apps, but
-              slower and more expensive, and answers will often just repeat your own site.
+              On by default: closer to what people see in the consumer apps, though slower and more expensive, and
+              answers will often repeat your own site. Turn it off to measure only what each model learned in training.
             </span>
           </span>
         </label>

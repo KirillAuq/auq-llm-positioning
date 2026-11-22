@@ -45,7 +45,7 @@ Import the repo in Vercel (framework preset: Next.js), add the environment varia
 - **Fixed questions:** add, edit, remove, reset.
 - **Follow-up questions:** how many to generate (0 to 12).
 - **Models:** the model ID for each provider. "Test key and load models" checks the key and lists the IDs the account can use.
-- **Web search:** off measures what each model learned in training; on is closer to the consumer apps.
+- **Web search:** on by default, which is closer to the consumer apps; off measures what each model learned in training.
 - **Domain in questions:** asks about "Acme (acme.com)" so a shared name resolves to the right company.
 
 ## Notes
