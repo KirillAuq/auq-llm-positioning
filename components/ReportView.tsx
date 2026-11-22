@@ -39,7 +39,7 @@ function Section({ id, eyebrow, title, intro, children }: {
   return (
     <section id={id} className="scroll-mt-6">
       <div className="eyebrow">{eyebrow}</div>
-      <h2 className="mt-1 text-xl font-semibold tracking-tight">{title}</h2>
+      <h2 className="display-sm mt-2">{title}</h2>
       {intro && <p className="mt-1 max-w-3xl text-sm text-muted">{intro}</p>}
       <div className="mt-4">{children}</div>
     </section>
@@ -132,7 +132,7 @@ function ScoreTile({ label, s, big }: { label: React.ReactNode; s: ClaimScore; b
   return (
     <div className="card p-4">
       <div className="text-sm">{label}</div>
-      <div className={`mt-1 font-semibold tracking-tight ${big ? "text-4xl" : "text-2xl"}`}>{s.pct === null ? "–" : `${s.pct}%`}</div>
+      <div className={`mt-2 tracking-[-0.03em] ${big ? "text-5xl font-normal" : "text-3xl font-normal"}`}>{s.pct === null ? "–" : `${s.pct}%`}</div>
       <p className="hint mt-1">
         {s.answered ? `${s.confirmed} of ${s.answered} confirmed · ${s.denied} false · ${s.unsure} unsure` : "No answers"}
       </p>
@@ -270,7 +270,7 @@ export default function ReportView({ report, onClose, closeLabel = "New audit" }
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="eyebrow">LLM positioning audit</div>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">{report.brandName}</h1>
+            <h1 className="display-lg mt-2">{report.brandName}</h1>
             <p className="mt-1 text-sm text-muted">
               {report.domain} · {new Date(report.createdAt).toLocaleString()} · web search {report.settings.webSearch ? "on" : "off"}
             </p>
@@ -342,7 +342,7 @@ export default function ReportView({ report, onClose, closeLabel = "New audit" }
       {g && (
         <Section id="gaps" eyebrow="The main finding" title="Where the LLMs diverge from the brand's positioning"
           intro="Each gap sets what the brand says about itself against what the LLMs said. The brand side comes only from the URLs and positioning doc you supplied.">
-          <p className="max-w-3xl text-base">{g.headline}</p>
+          <p className="max-w-3xl text-lg leading-7 text-body">{g.headline}</p>
           <div className={`mt-4 grid gap-3 ${cols}`}>
             {present.map((p) => g.perLlm[p] && (
               <div key={p} className="card p-4">

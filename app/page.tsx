@@ -102,7 +102,7 @@ export default function Home() {
     const at = steps.findIndex((s) => s.id === progress.step);
     return (
       <div className="mx-auto max-w-xl">
-        <h1 className="text-2xl font-semibold tracking-tight">Running the audit</h1>
+        <h1 className="display-md">Running the audit</h1>
         <p className="mt-1 text-sm text-muted">This usually takes a few minutes. Keep this tab open.</p>
         <ol className="card mt-6 divide-y divide-line">
           {steps.map((s, i) => (
@@ -128,8 +128,8 @@ export default function Home() {
     <div className="grid gap-10 lg:grid-cols-[1fr_300px]">
       <form onSubmit={submit} className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Find the gap between your positioning and what LLMs say</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted">
+          <h1 className="display-lg max-w-2xl">Find the gap between your positioning and <span className="highlight">what LLMs say</span></h1>
+          <p className="mt-4 max-w-2xl text-base text-body">
             Give the tool your pages and positioning doc. It asks ChatGPT, Claude and Gemini about the brand, then reports
             where their picture differs from yours. Optionally, add specific claims to have each LLM confirm or deny.
           </p>
