@@ -1,4 +1,4 @@
-import type { Settings } from "./types";
+import type { KeyName, Settings } from "./types";
 
 export const DEFAULT_FIXED_QUESTIONS = [
   "What is [brand]?",
@@ -22,11 +22,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   webSearch: true,
   includeDomain: true,
-  keys: { chatgpt: "", claude: "", gemini: "", deepinfra: "" },
-  appPassword: "",
 };
 
-export const ENV_VAR: Record<keyof Settings["keys"], string> = {
+export const ENV_VAR: Record<KeyName, string> = {
   chatgpt: "OPENAI_API_KEY",
   claude: "ANTHROPIC_API_KEY",
   gemini: "GEMINI_API_KEY",

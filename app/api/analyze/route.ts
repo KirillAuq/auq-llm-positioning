@@ -1,4 +1,5 @@
-import { handle, HttpError, requirePassword, resolveKey } from "@/lib/server/auth";
+import { handle, HttpError } from "@/lib/server/http";
+import { loadApp, resolveKey } from "@/lib/server/settings";
 import { comparePrompt, gapPrompt, questionsPrompt, selfPrompt, viewPrompt } from "@/lib/server/prompts";
 import { analyst } from "@/lib/server/providers";
 import { PROVIDERS } from "@/lib/types";
@@ -18,10 +19,8 @@ const providersIn = (v: unknown) => strings(v).filter((p): p is Provider => PROV
 export async function POST(req: Request) {
   return handle(async () => {
     const body = await req.json();
-    requirePassword(body.auth);
-    const key = resolveKey("deepinfra", body.auth);
-    const model = str(body.model).trim();
-    if (!model) throw new HttpError(400, "Missing analyst model");
+    const key = await resolveKey("deepinfra");
+    const model = (await loadApp()).settings.models.deepinfra;
     const run = <T>(p: { system: string; user: string }) => analyst<T>(key, model, p.system, p.user);
 
     switch (body.step) {

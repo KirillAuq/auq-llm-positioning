@@ -16,35 +16,58 @@ Finds the gap between how a SaaS brand describes itself and how ChatGPT, Claude 
    - How the brand describes itself, with a source for every claim
    - All questions and raw answers
 
-Reports are kept in the browser (localStorage) and can be downloaded as Markdown or printed to PDF.
+## Who can do what
+
+| | Runs audits | Reports | Settings and API keys |
+| --- | --- | --- | --- |
+| **Visitor** (not logged in) | Yes, on the admin's keys and models | Kept in their own browser | No access |
+| **Team** (logged in) | Yes | Saved for the whole team, filed by client | No access |
+| **Admin** | Yes | Same as team | Sets them for everyone |
+
+- **Visitors** can optionally leave an email. What they submit (website, other URLs, brand name, positioning doc, claims, email) is recorded, and the admin sees it under Admin → Visitor audits, with a CSV download.
+- **Team members** are added by the admin under Admin → Team, with a temporary password. Nobody can sign themselves up. A member can change their password from their account page; the admin can set a new one.
+- **API keys** saved by the admin are stored in the database and read only by the server. They are never sent to any browser, the admin's included.
+
+Reports can be downloaded as Markdown or printed to PDF.
 
 ## Setup
 
 ```bash
 npm install
-cp .env.example .env.local   # then fill in the keys
+cp .env.example .env.local   # then fill it in
 npm run dev
 ```
 
+### Supabase
+
+1. In the Supabase project, open the SQL Editor and run `supabase/migrations/20261122000000_accounts.sql`.
+2. Under Authentication → Sign In / Providers, turn off "Allow new users to sign up".
+3. Under Authentication → Users, add the admin's user (email and password, auto-confirmed).
+4. Set the environment variables below.
+
 | Variable | Used for |
 | --- | --- |
-| `OPENAI_API_KEY` | ChatGPT answers |
-| `ANTHROPIC_API_KEY` | Claude answers |
-| `GEMINI_API_KEY` | Gemini answers |
-| `DEEPINFRA_API_KEY` | Follow-up questions and all report analysis (required) |
-| `APP_PASSWORD` | Optional. When set, the API routes require it. Set this on any public deployment. |
+| `SUPABASE_URL` | The project URL |
+| `SUPABASE_PUBLISHABLE_KEY` | Lets the browser log in. Safe to expose. |
+| `SUPABASE_SECRET_KEY` | Server-side access to the data. Keep secret. |
+| `ADMIN_EMAIL` | The email of the admin's Supabase user |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPINFRA_API_KEY` | Optional fallbacks, used when the admin has not saved that key in Settings |
 
-Keys can also be entered per browser on the Settings page, which overrides the server's. An LLM with no key is skipped and the report says so.
+The older `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` names are accepted too. Without the Supabase variables the app still runs audits on the provider keys above, with default settings and no logins, team reports or lead capture.
+
+Every table has row level security on with no policies, so the publishable key can read nothing; all access goes through the app's server routes, which check who is logged in.
 
 ## Deploying to Vercel
 
 Import the repo in Vercel (framework preset: Next.js), add the environment variables above, and deploy. The audit runs as many short API calls driven from the browser, so no single function call runs long.
 
-## Settings
+Visitors run audits on the admin's keys with no usage cap, so set spending limits on each provider's dashboard.
+
+## Settings (admin only)
 
 - **Fixed questions:** add, edit, remove, reset.
 - **Follow-up questions:** how many to generate (0 to 12).
-- **Models:** the model ID for each provider. "Test key and load models" checks the key and lists the IDs the account can use.
+- **Models and API keys:** the model ID and key for each provider. "Test key and load models" checks the key and lists the IDs the account can use.
 - **Web search:** on by default, which is closer to the consumer apps; off measures what each model learned in training.
 - **Domain in questions:** asks about "Acme (acme.com)" so a shared name resolves to the right company.
 

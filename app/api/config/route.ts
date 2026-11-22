@@ -1,11 +1,14 @@
-import { ENV_VAR } from "@/lib/defaults";
+import { handle } from "@/lib/server/http";
+import { keySources, loadApp } from "@/lib/server/settings";
+import { publicSupabase } from "@/lib/server/supabase";
 
 export const dynamic = "force-dynamic";
 
-/** Tells the UI which keys the server already has, without revealing them. */
+/** What any browser needs to run an audit: the shared settings, which keys exist (never their values), and how to sign in. */
 export async function GET() {
-  const serverKeys = Object.fromEntries(
-    Object.entries(ENV_VAR).map(([name, env]) => [name, !!process.env[env]?.trim()]),
-  );
-  return Response.json({ serverKeys, passwordRequired: !!process.env.APP_PASSWORD });
+  return handle(async () => {
+    const [{ settings }, sources] = await Promise.all([loadApp(), keySources()]);
+    const serverKeys = Object.fromEntries(Object.entries(sources).map(([k, v]) => [k, v !== "missing"]));
+    return { settings, serverKeys, supabase: publicSupabase() };
+  });
 }

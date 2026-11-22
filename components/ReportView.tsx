@@ -238,7 +238,7 @@ function ComparisonCard({ c, q, n, present }: { c: QuestionComparison; q: Questi
   );
 }
 
-export default function ReportView({ report, onClose }: { report: Report; onClose: () => void }) {
+export default function ReportView({ report, onClose, closeLabel = "New audit" }: { report: Report; onClose: () => void; closeLabel?: string }) {
   const [filter, setFilter] = useState<Provider | "all">("all");
   const [tab, setTab] = useState<"positioning" | "claims">("positioning");
   const claims = report.claims ?? [];
@@ -281,7 +281,7 @@ export default function ReportView({ report, onClose }: { report: Report; onClos
           <div className="no-print flex gap-2">
             <button className="btn" onClick={download}>Download Markdown</button>
             <button className="btn" onClick={() => window.print()}>Print / PDF</button>
-            <button className="btn btn-primary" onClick={onClose}>New audit</button>
+            <button className="btn btn-primary" onClick={onClose}>{closeLabel}</button>
           </div>
         </div>
         {claims.length > 0 && (
