@@ -1,29 +1,27 @@
 @import "tailwindcss";
 
 /*
- * Warm-dark theme. One surface tone (a brown-tinted charcoal, never pure black), an
- * off-white that is both the text colour and the primary button fill, and no
- * chromatic brand accent. Elevation comes from surface contrast and hairlines, never
- * from shadows. The only colour on the page is status: severity, similarity,
- * verdicts and the three LLMs.
+ * AUQ theme, taken from auq.io: near-black navy page, navy panels, white text,
+ * cyan as the highlight colour and orange for the primary call to action.
  */
 :root {
   color-scheme: dark;
-  --bg: #2b2622;          /* canvas */
-  --surface: #383330;     /* canvas-soft: cards */
-  --line: #3f3a36;        /* hairline */
-  --line-strong: #5a524c; /* outlines of things you can click or type in */
-  --ink: #f7f5f0;
-  --body: #dad2c1;
-  --muted: #aea69c;
-  --accent: #f7f5f0;
-  --accent-ink: #2b2622;
-  --chatgpt: #8fc9a4;
-  --claude: #e39a72;
-  --gemini: #93b4ea;
-  --high: #ec8f80;
-  --medium: #e2b56c;
-  --low: #aea69c;
+  --bg: #090e12;
+  --surface: #131e26;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.28);
+  --ink: #ffffff;
+  --body: rgba(255, 255, 255, 0.8);
+  --muted: rgba(255, 255, 255, 0.55);
+  --accent: #00fff8;
+  --accent-ink: #090e12;
+  --cta: #ed702d;
+  --chatgpt: #3fe0a5;
+  --claude: #ed702d;
+  --gemini: #5aa9ff;
+  --high: #ff4444;
+  --medium: #ffc107;
+  --low: rgba(255, 255, 255, 0.55);
 }
 
 @theme inline {
@@ -43,20 +41,20 @@
   --color-medium: var(--medium);
   --color-low: var(--low);
 
-  --font-sans: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-sans: "Fira Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: "Space Grotesk Variable", "Space Grotesk", system-ui, sans-serif;
+  --color-cta: var(--cta);
 
   /* Two working weights only: 400 and 500. Nothing on the page is heavier. */
-  --font-weight-semibold: 500;
-  --font-weight-bold: 500;
+  --font-weight-semibold: 600;
 
   /* Tight, almost rectangular corners. Pills are kept for status badges and dots. */
   --radius-sm: 2px;
-  --radius-md: 3px;
-  --radius-lg: 4px;
-  --radius-xl: 4px;
-  --radius-2xl: 6px;
+  --radius-md: 2px;
+  --radius-lg: 10px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
 }
 
 body {
@@ -69,17 +67,17 @@ body {
 @layer components {
   .card { @apply rounded-lg border border-line bg-surface; }
   .input { @apply w-full rounded-md border border-line-strong bg-bg px-2.5 py-2 text-sm text-ink outline-none placeholder:text-muted/70 focus:border-accent; }
-  .btn { @apply inline-flex items-center justify-center gap-2 rounded-md border border-line-strong bg-transparent px-4 py-2 text-sm font-medium text-ink hover:border-muted hover:bg-surface disabled:cursor-not-allowed disabled:opacity-40; }
-  .btn-primary { @apply border-accent bg-accent text-accent-ink hover:border-accent hover:bg-accent hover:opacity-90; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-md border border-cta bg-transparent px-4 py-2 font-display text-[13px] font-bold uppercase tracking-[0.05em] text-ink hover:bg-cta hover:text-black disabled:cursor-not-allowed disabled:opacity-40; }
+  .btn-primary { @apply border-cta bg-cta text-black/80 hover:bg-cta hover:text-white; }
   .label { @apply mb-1 block text-sm font-medium; }
   .hint { @apply text-xs text-muted; }
-  .eyebrow { @apply font-mono text-[11px] uppercase tracking-[0.08em] text-muted; }
+  .eyebrow { @apply font-display text-[11px] font-bold uppercase tracking-[0.12em] text-accent; }
 
   /* Display type: light weights and negative tracking, quiet rather than loud. */
-  .display-lg { @apply text-[2.5rem] leading-[1.1] font-normal tracking-[-0.03em] sm:text-5xl; }
-  .display-md { @apply text-[2rem] leading-[1.25] font-medium tracking-[-0.025em]; }
-  .display-sm { @apply text-2xl leading-8 font-medium tracking-[-0.017em]; }
-  .serif-accent { @apply font-serif font-normal italic tracking-[-0.01em]; }
+  .display-lg { @apply font-display text-[2.5rem] leading-[1.1] font-normal tracking-[-0.02em] sm:text-6xl; }
+  .display-md { @apply font-display text-[2rem] leading-[1.2] font-normal tracking-[-0.01em]; }
+  .display-sm { @apply font-display text-2xl leading-8 font-normal; }
+  .highlight { @apply text-accent; }
 }
 
 /* Rendered LLM answers */
@@ -98,11 +96,11 @@ body {
 @media print {
   :root {
     color-scheme: light;
-    --bg: #ffffff; --surface: #ffffff; --line: #d9d4cc; --line-strong: #b8b1a7;
-    --ink: #2b2622; --body: #3f3a36; --muted: #6b645c;
-    --accent: #2b2622; --accent-ink: #ffffff;
-    --chatgpt: #1f7a4d; --claude: #b5562a; --gemini: #2f5fb8;
-    --high: #b3382c; --medium: #946312; --low: #6b645c;
+    --bg: #ffffff; --surface: #ffffff; --line: #d5dade; --line-strong: #aab3ba;
+    --ink: #090e12; --body: #26323b; --muted: #5b6770;
+    --accent: #007d7a; --accent-ink: #ffffff; --cta: #c2541a;
+    --chatgpt: #14805a; --claude: #c2541a; --gemini: #2563b8;
+    --high: #c62828; --medium: #946312; --low: #5b6770;
   }
   .no-print { display: none !important; }
   body { background: #fff; }

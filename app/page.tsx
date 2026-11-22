@@ -128,7 +128,7 @@ export default function Home() {
     <div className="grid gap-10 lg:grid-cols-[1fr_300px]">
       <form onSubmit={submit} className="space-y-6">
         <div>
-          <h1 className="display-lg max-w-2xl">Find the gap between your positioning and <span className="serif-accent">what LLMs say</span></h1>
+          <h1 className="display-lg max-w-2xl">Find the gap between your positioning and <span className="highlight">what LLMs say</span></h1>
           <p className="mt-4 max-w-2xl text-base text-body">
             Give the tool your pages and positioning doc. It asks ChatGPT, Claude and Gemini about the brand, then reports
             where their picture differs from yours. Optionally, add specific claims to have each LLM confirm or deny.

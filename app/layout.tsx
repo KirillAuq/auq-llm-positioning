@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Header from "@/components/Header";
 import { AuthProvider } from "@/lib/auth";
-import "@fontsource-variable/inter";
-import "@fontsource/dm-mono/400.css";
-import "@fontsource/instrument-serif/400-italic.css";
+import "@fontsource-variable/space-grotesk";
+import "@fontsource/fira-sans/400.css";
+import "@fontsource/fira-sans/500.css";
+import "@fontsource/fira-sans/600.css";
+import "@fontsource/space-mono/400.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
