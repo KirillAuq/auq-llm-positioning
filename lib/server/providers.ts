@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Answer, Citation, KeyName, Provider } from "../types";
-import { HttpError } from "./auth";
+import { HttpError } from "./http";
 
 interface AskArgs {
   key: string;

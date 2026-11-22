@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchModels, getConfig, loadSettings, saveSettings } from "@/lib/client";
-import type { ServerConfig } from "@/lib/client";
+import Guard from "@/components/Guard";
+import { api } from "@/lib/client";
 import { DEFAULT_FIXED_QUESTIONS, DEFAULT_SETTINGS, ENV_VAR } from "@/lib/defaults";
-import type { KeyName, Settings } from "@/lib/types";
+import type { KeyName, KeySource, Settings } from "@/lib/types";
 
 const ROWS: { name: KeyName; label: string; role: string }[] = [
   { name: "chatgpt", label: "ChatGPT (OpenAI)", role: "Audited model" },
@@ -14,34 +14,59 @@ const ROWS: { name: KeyName; label: string; role: string }[] = [
 ];
 
 type Test = { state: "idle" | "busy" | "ok" | "fail"; message?: string; models?: string[] };
+type Saved = { settings: Settings; keys: Record<KeyName, KeySource> };
+const NO_KEYS: Record<KeyName, string> = { chatgpt: "", claude: "", gemini: "", deepinfra: "" };
 
-export default function SettingsPage() {
+function SettingsForm() {
   const [s, setS] = useState<Settings | null>(null);
-  const [config, setConfig] = useState<ServerConfig | null>(null);
+  const [sources, setSources] = useState<Record<KeyName, KeySource> | null>(null);
+  // Keys typed but not yet saved. A saved key is never sent back to the browser.
+  const [typed, setTyped] = useState(NO_KEYS);
+  const [removed, setRemoved] = useState<KeyName[]>([]);
   const [tests, setTests] = useState<Partial<Record<KeyName, Test>>>({});
-  const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [status, setStatus] = useState<{ kind: "ok" | "fail" | "busy"; text: string } | null>(null);
+
+  const apply = (r: Saved) => {
+    setS(r.settings);
+    setSources(r.keys);
+    setTyped(NO_KEYS);
+    setRemoved([]);
+    setDirty(false);
+  };
 
   useEffect(() => {
-    setS(loadSettings());
-    getConfig().then(setConfig).catch(() => {});
+    api<Saved>("/api/settings").then(apply).catch((err) => setStatus({ kind: "fail", text: err instanceof Error ? err.message : String(err) }));
   }, []);
 
-  if (!s) return null;
+  if (!s || !sources) return status ? <p className="text-sm text-high">{status.text}</p> : null;
 
-  // Every edit is saved straight away; there is no separate save step to forget.
   const update = (patch: Partial<Settings>) => {
-    const next = { ...s, ...patch };
-    setS(next);
-    saveSettings(next);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1200);
+    setS({ ...s, ...patch });
+    setDirty(true);
+    setStatus(null);
   };
   const setQuestion = (i: number, v: string) => update({ fixedQuestions: s.fixedQuestions.map((q, j) => (j === i ? v : q)) });
+
+  async function save() {
+    setStatus({ kind: "busy", text: "Saving…" });
+    try {
+      const keys: Partial<Record<KeyName, string | null>> = {};
+      for (const { name } of ROWS) {
+        if (typed[name].trim()) keys[name] = typed[name].trim();
+        else if (removed.includes(name)) keys[name] = null;
+      }
+      apply(await api<Saved>("/api/settings", { settings: s, keys }, "PUT"));
+      setStatus({ kind: "ok", text: "Saved. Every audit now uses these settings." });
+    } catch (err) {
+      setStatus({ kind: "fail", text: err instanceof Error ? err.message : String(err) });
+    }
+  }
 
   async function test(name: KeyName) {
     setTests((t) => ({ ...t, [name]: { state: "busy" } }));
     try {
-      const models = await fetchModels(name, s!);
+      const { models } = await api<{ models: string[] }>("/api/models", { name, key: typed[name] });
       const found = models.includes(s!.models[name]);
       setTests((t) => ({
         ...t,
@@ -58,14 +83,26 @@ export default function SettingsPage() {
     }
   }
 
+  const keyHint = (name: KeyName) => {
+    if (removed.includes(name)) return sourcesAfterRemoval(name);
+    if (sources[name] === "saved") return "A key is saved. Type a new one to replace it.";
+    if (sources[name] === "env") return `Using the server's ${ENV_VAR[name]}. Type a key to use that instead.`;
+    return "No key yet. Audits skip this provider until one is added.";
+  };
+  const sourcesAfterRemoval = (name: KeyName) => `The saved key will be removed when you save. ${ENV_VAR[name]} on the server is used if it is set.`;
+
   return (
     <div className="mx-auto max-w-3xl space-y-8">
-      <div className="flex items-end justify-between">
+      <div className="sticky top-0 z-10 -mx-4 flex flex-wrap items-end justify-between gap-3 border-b border-line bg-bg px-4 py-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-          <p className="mt-1 text-sm text-muted">Saved automatically in this browser.</p>
+          <p className="mt-1 text-sm text-muted">These apply to every audit, for the team and for visitors.</p>
         </div>
-        <span className={`text-sm text-chatgpt transition-opacity ${saved ? "opacity-100" : "opacity-0"}`}>Saved</span>
+        <div className="flex items-center gap-3">
+          {status && <span className={`text-sm ${status.kind === "fail" ? "text-high" : status.kind === "ok" ? "text-chatgpt" : "text-muted"}`}>{status.text}</span>}
+          {dirty && !status && <span className="text-sm text-medium">Unsaved changes</span>}
+          <button className="btn btn-primary" disabled={!dirty || status?.kind === "busy"} onClick={save}>Save settings</button>
+        </div>
       </div>
 
       <section className="card p-5">
@@ -109,8 +146,8 @@ export default function SettingsPage() {
           <span>
             <span className="font-medium">Let the LLMs search the web</span>
             <span className="hint block">
-              Off measures what each model learned in training. On is closer to what people see in the consumer apps, but
-              slower and more expensive, and answers will often just repeat your own site.
+              On by default: closer to what people see in the consumer apps, though slower and more expensive, and
+              answers will often repeat your own site. Turn it off to measure only what each model learned in training.
             </span>
           </span>
         </label>
@@ -119,8 +156,8 @@ export default function SettingsPage() {
       <section className="card p-5">
         <h2 className="font-semibold">Models and API keys</h2>
         <p className="hint mt-1">
-          Keys set as environment variables on the server are used by default. A key entered here is stored in this
-          browser only and overrides the server&apos;s for your audits.
+          Keys saved here are used for everyone&apos;s audits and are kept on the server. They are never shown again, to you
+          or to anyone else, and never reach a visitor&apos;s browser.
         </p>
         <div className="mt-4 space-y-6">
           {ROWS.map(({ name, label, role }) => {
@@ -145,14 +182,20 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="label" htmlFor={`key-${name}`}>API key</label>
-                    <input id={`key-${name}`} className="input font-mono" type="password" autoComplete="off" value={s.keys[name]}
-                      placeholder={config?.serverKeys[name] ? `Using server's ${ENV_VAR[name]}` : `Not set on server (${ENV_VAR[name]})`}
-                      onChange={(e) => update({ keys: { ...s.keys, [name]: e.target.value.trim() } })} />
+                    <input id={`key-${name}`} className="input font-mono" type="password" autoComplete="off" value={typed[name]}
+                      placeholder={sources[name] === "saved" && !removed.includes(name) ? "••••••••  saved" : "Paste a key"}
+                      onChange={(e) => { setTyped({ ...typed, [name]: e.target.value }); setDirty(true); setStatus(null); }} />
+                    <p className="hint mt-1">
+                      {keyHint(name)}{" "}
+                      {sources[name] === "saved" && !removed.includes(name) && !typed[name] && (
+                        <button className="underline" onClick={() => { setRemoved([...removed, name]); setDirty(true); setStatus(null); }}>Remove saved key</button>
+                      )}
+                    </p>
                   </div>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <button className="btn" disabled={t?.state === "busy"} onClick={() => test(name)}>
-                    {t?.state === "busy" ? "Checking…" : "Test key and load models"}
+                    {t?.state === "busy" ? "Checking…" : typed[name] ? "Test this key and load models" : "Test key and load models"}
                   </button>
                   {t?.message && <span className={`text-sm ${t.state === "ok" ? "text-chatgpt" : "text-high"}`}>{t.message}</span>}
                 </div>
@@ -162,14 +205,10 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {config?.passwordRequired && (
-        <section className="card p-5">
-          <h2 className="font-semibold">App password</h2>
-          <p className="hint mt-1">This deployment requires a password (the server&apos;s APP_PASSWORD) to run audits.</p>
-          <input className="input mt-3 max-w-sm" type="password" autoComplete="off" value={s.appPassword}
-            onChange={(e) => update({ appPassword: e.target.value })} aria-label="App password" />
-        </section>
-      )}
     </div>
   );
+}
+
+export default function SettingsPage() {
+  return <Guard admin><SettingsForm /></Guard>;
 }

@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import ReportView from "@/components/ReportView";
-import { claimScore, deleteReport, loadReports, loadSettings, parseClaims, runAudit, STEPS } from "@/lib/client";
+import { api, claimScore, deleteReport, loadReports, parseClaims, runAudit, saveReport, STEPS } from "@/lib/client";
+import { useAuth } from "@/lib/auth";
 import type { Progress } from "@/lib/client";
 import { MAX_CLAIMS, MAX_URLS } from "@/lib/defaults";
-import type { Report } from "@/lib/types";
+import type { Client, Report, ReportSummary } from "@/lib/types";
+
+const NEW_CLIENT = "__new__";
 
 const URL_LABELS = ["Brand URL", ...Array.from({ length: MAX_URLS - 1 }, (_, i) => `Brand URL ${i + 2}`)];
 
@@ -21,8 +24,22 @@ export default function Home() {
   const [error, setError] = useState("");
   const [report, setReport] = useState<Report | null>(null);
   const [history, setHistory] = useState<Report[]>([]);
+  const { ready, enabled, user } = useAuth();
+  // Visitors: an optional email, saved with what they asked to audit.
+  const [email, setEmail] = useState("");
+  // Team: which client the report is filed under.
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientId, setClientId] = useState("");
+  const [newClient, setNewClient] = useState("");
+  const [recent, setRecent] = useState<ReportSummary[]>([]);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => setHistory(loadReports()), [report]);
+  useEffect(() => {
+    if (!user) return;
+    api<{ clients: Client[] }>("/api/clients").then((r) => setClients(r.clients)).catch(() => {});
+    api<{ reports: ReportSummary[] }>("/api/reports").then((r) => setRecent(r.reports.slice(0, 8))).catch(() => {});
+  }, [user, report]);
 
   const running = progress !== null;
 
@@ -34,10 +51,35 @@ export default function Home() {
       setError("Add the brand URL before running the audit.");
       return;
     }
+    if (user && clientId === NEW_CLIENT && !newClient.trim()) {
+      setError("Name the new client, or pick an existing one.");
+      return;
+    }
+    setNotice("");
     setProgress({ step: "scrape", detail: "", done: 0, total: 1 });
     try {
       const input = { urls: urls.map((u) => u.trim()).filter(Boolean), positioningDoc: doc, brandHint, claims };
-      setReport(await runAudit(input, loadSettings(), setProgress));
+      // A visitor's request is recorded before the audit starts, so it is kept even if they leave midway.
+      if (!user) await api("/api/leads", { ...input, email });
+      const result = await runAudit(input, setProgress);
+      if (user) {
+        // The report is shown either way; a failed save is said plainly rather than losing the audit.
+        try {
+          let id = clientId;
+          if (id === NEW_CLIENT) {
+            id = (await api<{ client: Client }>("/api/clients", { name: newClient })).client.id;
+            setClientId(id);
+            setNewClient("");
+          }
+          await api("/api/reports", { report: result, clientId: id || null });
+        } catch (err) {
+          saveReport(result);
+          setNotice(`This report could not be saved to the team's reports (${err instanceof Error ? err.message : err}). It is kept in this browser instead.`);
+        }
+      } else {
+        saveReport(result);
+      }
+      setReport(result);
       window.scrollTo(0, 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -46,7 +88,14 @@ export default function Home() {
     }
   }
 
-  if (report) return <ReportView report={report} onClose={() => setReport(null)} />;
+  if (report) {
+    return (
+      <>
+        {notice && <div className="no-print mb-6 rounded-lg border border-medium p-3 text-sm text-medium">{notice}</div>}
+        <ReportView report={report} onClose={() => { setReport(null); setNotice(""); }} />
+      </>
+    );
+  }
 
   if (running) {
     const steps = STEPS.filter((s) => s.id !== "claims" || claims.length > 0);
@@ -143,31 +192,83 @@ export default function Home() {
         </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        {ready && user && (
+          <div className="card p-5">
+            <label className="label" htmlFor="client">Client</label>
+            <p className="hint mb-2">The report is saved to the team&apos;s reports under this client. You can move it later.</p>
+            <div className="flex flex-wrap gap-2">
+              <select id="client" className="input max-w-xs" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+                <option value="">No client</option>
+                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value={NEW_CLIENT}>New client…</option>
+              </select>
+              {clientId === NEW_CLIENT && (
+                <input className="input max-w-xs" aria-label="New client name" placeholder="Client name" value={newClient} onChange={(e) => setNewClient(e.target.value)} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {ready && enabled && !user && (
+          <div className="card p-5">
+            <label className="label" htmlFor="email">Your email <span className="font-normal text-muted">(optional)</span></label>
+            <p className="hint mb-2">Add it if you&apos;d like us to be able to follow up about your results.</p>
+            <input id="email" className="input max-w-sm" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-4">
           <button className="btn btn-primary px-5 py-2.5" type="submit">Run audit</button>
-          <span className="hint">
-            Questions, models and API keys are in <Link href="/settings" className="underline">Settings</Link>.
-          </span>
+          {user?.role === "admin" && (
+            <span className="hint">
+              Questions, models and API keys are in <Link href="/settings" className="underline">Settings</Link>.
+            </span>
+          )}
+          {ready && enabled && !user && <span className="hint">We keep a record of the websites and details submitted here.</span>}
         </div>
       </form>
 
       <aside>
+        {user ? (
+          <>
+            <div className="flex items-baseline justify-between">
+              <div className="eyebrow">Recent team reports</div>
+              <Link href="/reports" className="hint underline">All reports</Link>
+            </div>
+            {recent.length === 0 && <p className="mt-2 text-sm text-muted">None yet.</p>}
+            <ul className="mt-2 space-y-2">
+              {recent.map((r) => (
+                <li key={r.id}>
+                  <Link href={`/reports?open=${r.id}`} className="card block p-3 text-sm hover:border-muted">
+                    <div className="truncate font-medium">{r.brand_name}</div>
+                    <div className="hint">
+                      {new Date(r.created_at).toLocaleDateString()} · {clients.find((c) => c.id === r.client_id)?.name ?? "No client"}
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <>
         <div className="eyebrow">Past audits (this browser)</div>
-        {history.length === 0 && <p className="mt-2 text-sm text-muted">None yet.</p>}
-        <ul className="mt-2 space-y-2">
-          {history.map((r) => (
-            <li key={r.id} className="card flex items-center justify-between gap-2 p-3 text-sm">
-              <button className="min-w-0 text-left" onClick={() => setReport(r)}>
-                <div className="truncate font-medium">{r.brandName}</div>
-                <div className="hint">{new Date(r.createdAt).toLocaleDateString()} · {r.gapReport?.gaps.length ?? 0} gaps{r.claims?.length ? ` · claims ${claimScore(r.claims).pct ?? "–"}%` : ""}</div>
-              </button>
-              <button className="text-muted hover:text-high" aria-label={`Delete audit of ${r.brandName}`}
-                onClick={() => { if (confirm(`Delete the audit of ${r.brandName}?`)) { deleteReport(r.id); setHistory(loadReports()); } }}>
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
+            {history.length === 0 && <p className="mt-2 text-sm text-muted">None yet.</p>}
+            <ul className="mt-2 space-y-2">
+              {history.map((r) => (
+                <li key={r.id} className="card flex items-center justify-between gap-2 p-3 text-sm">
+                  <button className="min-w-0 text-left" onClick={() => setReport(r)}>
+                    <div className="truncate font-medium">{r.brandName}</div>
+                    <div className="hint">{new Date(r.createdAt).toLocaleDateString()} · {r.gapReport?.gaps.length ?? 0} gaps{r.claims?.length ? ` · claims ${claimScore(r.claims).pct ?? "–"}%` : ""}</div>
+                  </button>
+                  <button className="text-muted hover:text-high" aria-label={`Delete audit of ${r.brandName}`}
+                    onClick={() => { if (confirm(`Delete the audit of ${r.brandName}?`)) { deleteReport(r.id); setHistory(loadReports()); } }}>
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </aside>
     </div>
   );

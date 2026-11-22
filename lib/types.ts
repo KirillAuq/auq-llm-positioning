@@ -16,9 +16,37 @@ export interface Settings {
   webSearch: boolean;
   /** Replace [brand] with "Name (domain.com)" so ambiguous names resolve to the right company. */
   includeDomain: boolean;
-  /** Optional per-browser key overrides. Empty string = use the server's env var. */
-  keys: Record<KeyName, string>;
-  appPassword: string;
+}
+
+export type Role = "admin" | "team";
+export interface User { id: string; email: string; role: Role }
+export interface TeamMember { id: string; email: string; role: Role; created_at: string }
+export interface Client { id: string; name: string; created_at: string }
+
+/** Where a provider's API key comes from: saved by the admin, the server's env var, or nowhere. */
+export type KeySource = "saved" | "env" | "missing";
+
+/** What a visitor typed into the intake, kept so the admin can see who wanted an audit. */
+export interface Lead {
+  id: string;
+  created_at: string;
+  email: string | null;
+  domain: string;
+  urls: string[];
+  brand_hint: string;
+  positioning_doc: string;
+  claims: string[];
+}
+
+/** A saved team report as listed, without its full contents. */
+export interface ReportSummary {
+  id: string;
+  created_at: string;
+  brand_name: string;
+  domain: string;
+  client_id: string | null;
+  created_by_email: string | null;
+  summary: { gaps: number; claimsPct: number | null };
 }
 
 export interface ScrapedPage {

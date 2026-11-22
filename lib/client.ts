@@ -1,32 +1,14 @@
 "use client";
 
-import { DEFAULT_SETTINGS, MAX_CLAIM_CHARS, MAX_CLAIMS } from "./defaults";
+import { MAX_CLAIM_CHARS, MAX_CLAIMS } from "./defaults";
+import { accessToken } from "./session";
 import { PROVIDER_LABEL, PROVIDERS, SIMILARITY_LABEL, VERDICT_LABEL } from "./types";
 import type {
   Answer, BrandSelf, ClaimCheck, ClaimResult, GapReport, KeyName, LlmView, Provider, Question, QuestionComparison, Report, ScrapedPage, Settings,
 } from "./types";
 
-const SETTINGS_KEY = "lpa.settings.v1";
 const REPORTS_KEY = "lpa.reports.v1";
 const MAX_SAVED = 15;
-
-export function loadSettings(): Settings {
-  try {
-    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}");
-    return {
-      ...DEFAULT_SETTINGS,
-      ...saved,
-      models: { ...DEFAULT_SETTINGS.models, ...saved.models },
-      keys: { ...DEFAULT_SETTINGS.keys, ...saved.keys },
-    };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-}
-
-export function saveSettings(s: Settings) {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
-}
 
 export function loadReports(): Report[] {
   try {
@@ -53,14 +35,15 @@ export function deleteReport(id: string) {
   localStorage.setItem(REPORTS_KEY, JSON.stringify(loadReports().filter((r) => r.id !== id)));
 }
 
-function authOf(s: Settings) {
-  return { keys: s.keys, appPassword: s.appPassword };
-}
-
-export async function api<T>(path: string, body?: unknown): Promise<T> {
+/** Calls one of the app's API routes, as the signed-in user when there is one. */
+export async function api<T>(path: string, body?: unknown, method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"): Promise<T> {
+  const token = await accessToken();
   const res = await fetch(path, {
-    method: body ? "POST" : "GET",
-    headers: body ? { "content-type": "application/json" } : undefined,
+    method: method ?? (body ? "POST" : "GET"),
+    headers: {
+      ...(body ? { "content-type": "application/json" } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => ({ error: `Server returned ${res.status}` }));
@@ -69,13 +52,13 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export interface ServerConfig {
+  /** The shared settings every audit runs with. Only an admin can change them. */
+  settings: Settings;
   serverKeys: Record<KeyName, boolean>;
-  passwordRequired: boolean;
+  supabase: { url: string; publishableKey: string } | null;
 }
 
 export const getConfig = () => api<ServerConfig>("/api/config");
-export const fetchModels = (name: KeyName, s: Settings) =>
-  api<{ models: string[] }>("/api/models", { name, auth: authOf(s) }).then((r) => r.models);
 
 export function domainOf(url: string) {
   try {
@@ -172,28 +155,24 @@ export function claimScore(claims: ClaimCheck[], provider?: Provider): ClaimScor
  * single serverless invocation has to outlive the platform's time limit and the
  * UI can show progress as answers arrive.
  */
-export async function runAudit(
-  input: AuditInput,
-  settings: Settings,
-  onProgress: (p: Progress) => void,
-): Promise<Report> {
-  const auth = authOf(settings);
+export async function runAudit(input: AuditInput, onProgress: (p: Progress) => void): Promise<Report> {
   const notes: string[] = [];
   const config = await getConfig();
-  const hasKey = (k: KeyName) => !!settings.keys[k].trim() || config.serverKeys[k];
+  const settings = config.settings;
+  const hasKey = (k: KeyName) => config.serverKeys[k];
 
   if (!hasKey("deepinfra")) {
-    throw new Error("A DeepInfra API key is required to build the report. Add one on the Settings page or set DEEPINFRA_API_KEY.");
+    throw new Error("The audit can't run yet: no DeepInfra API key is set up. An admin can add one in Settings.");
   }
   let providers: Provider[] = PROVIDERS.filter(hasKey);
-  if (!providers.length) throw new Error("No API key found for ChatGPT, Claude or Gemini. Add at least one on the Settings page.");
+  if (!providers.length) throw new Error("The audit can't run yet: no API key is set up for ChatGPT, Claude or Gemini. An admin can add one in Settings.");
   for (const p of PROVIDERS) {
     if (!providers.includes(p)) notes.push(`${PROVIDER_LABEL[p]} was skipped: no API key configured.`);
   }
 
   // 1. Brand material
   onProgress({ step: "scrape", detail: `${input.urls.length} URL(s)`, done: 0, total: 1 });
-  const { pages } = await api<{ pages: ScrapedPage[] }>("/api/scrape", { urls: input.urls, auth });
+  const { pages } = await api<{ pages: ScrapedPage[] }>("/api/scrape", { urls: input.urls });
   for (const p of pages) {
     if (!p.ok) notes.push(`Could not read ${p.url}: ${p.error}`);
     else if (p.warning) notes.push(`${p.url}: ${p.warning}`);
@@ -203,7 +182,6 @@ export async function runAudit(
   onProgress({ step: "self", detail: settings.models.deepinfra, done: 0, total: 1 });
   const { self } = await api<{ self: BrandSelf }>("/api/analyze", {
     step: "self", pages, positioningDoc: input.positioningDoc, brandHint: input.brandHint,
-    model: settings.models.deepinfra, auth,
   });
 
   const domain = domainOf(input.urls[0]);
@@ -234,7 +212,7 @@ export async function runAudit(
       let answer: Answer;
       try {
         answer = await api<Answer>("/api/ask", {
-          provider: p, question: q.text, model: settings.models[p], webSearch: settings.webSearch, auth,
+          provider: p, question: q.text,
         });
       } catch (err) {
         answer = { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -268,8 +246,7 @@ export async function runAudit(
     try {
       const { questions } = await api<{ questions: { question: string; rationale: string }[] }>("/api/analyze", {
         step: "questions", brand: brandInQuestion, questions: fixed, count: settings.autoQuestionCount,
-        model: settings.models.deepinfra, auth,
-      });
+          });
       const generated: Question[] = questions.map((q, i) => ({
         id: `g${i}`, kind: "generated", text: fill(q.question), rationale: q.rationale, answers: {},
       }));
@@ -290,7 +267,7 @@ export async function runAudit(
       let answer: Answer;
       try {
         answer = await api<Answer>("/api/ask", {
-          provider: p, question: claimQuestion(brandInQuestion, c.claim), model: settings.models[p], webSearch: settings.webSearch, auth,
+          provider: p, question: claimQuestion(brandInQuestion, c.claim),
         });
       } catch (err) {
         answer = { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -302,7 +279,7 @@ export async function runAudit(
   }
 
   // 6. (a) per-LLM views and the question-by-question comparison, in parallel
-  const analyze = { brand: brandName, questions: report.questions, model: settings.models.deepinfra, auth };
+  const analyze = { brand: brandName, questions: report.questions };
   let done = 0;
   // Scored a few questions per call so the analyst's reply stays well inside its token budget.
   const batches: Question[][] = [];
@@ -338,7 +315,6 @@ export async function runAudit(
   });
   report.gapReport = gapReport;
 
-  saveReport(report);
   return report;
 }
 
