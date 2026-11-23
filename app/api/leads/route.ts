@@ -27,6 +27,8 @@ export async function POST(req: Request) {
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "That email address doesn't look right. Fix it or leave it blank.");
     ok(await db().from("leads").insert({
       email: email || null,
+      name: text(body.name, 200),
+      llms_txt: text(body.llmsTxt, 500),
       domain: domainOf(urls[0]),
       urls,
       brand_hint: text(body.brandHint, 200),
@@ -42,7 +44,7 @@ export async function GET(req: Request) {
   return handle(async () => {
     await requireUser(req, "admin");
     const leads = ok(await db().from("leads")
-      .select("id, created_at, email, domain, urls, brand_hint, positioning_doc, claims")
+      .select("id, created_at, name, email, domain, urls, llms_txt, brand_hint, positioning_doc, claims")
       .order("created_at", { ascending: false }).limit(1000)) ?? [];
     return { leads };
   });

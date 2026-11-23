@@ -30,9 +30,11 @@ export type KeySource = "saved" | "env" | "missing";
 export interface Lead {
   id: string;
   created_at: string;
+  name: string;
   email: string | null;
   domain: string;
   urls: string[];
+  llms_txt: string;
   brand_hint: string;
   positioning_doc: string;
   claims: string[];

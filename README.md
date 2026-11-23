@@ -24,7 +24,8 @@ Finds the gap between how a SaaS brand describes itself and how ChatGPT, Claude 
 | **Team** (logged in) | Yes | Saved for the whole team, filed by client | No access |
 | **Admin** | Yes | Same as team | Sets them for everyone |
 
-- **Visitors** can optionally leave an email. What they submit (website, other URLs, brand name, positioning doc, claims, email) is recorded, and the admin sees it under Admin → Visitor audits, with a CSV download.
+- **Visitors** get their own homepage: an introduction, then a four-step form (website, name and email, llms.txt and up to three solution pages, up to six claims). Only the website is required. If the site has an `llms.txt`, it is read and used as part of the brand's own material.
+- **Visitors** can optionally leave a name and email. What they submit (website, other URLs, brand name, positioning doc, claims, email) is recorded, and the admin sees it under Admin → Visitor audits, with a CSV download.
 - **Team members** are added by the admin under Admin → Team, with a temporary password. Nobody can sign themselves up. A member can change their password from their account page; the admin can set a new one.
 - **API keys** saved by the admin are stored in the database and read only by the server. They are never sent to any browser, the admin's included.
 
@@ -40,7 +41,7 @@ npm run dev
 
 ### Supabase
 
-1. In the Supabase project, open the SQL Editor and run `supabase/migrations/20261122000000_accounts.sql`.
+1. In the Supabase project, open the SQL Editor and run the files in `supabase/migrations/`, oldest first.
 2. Under Authentication → Sign In / Providers, turn off "Allow new users to sign up".
 3. Under Authentication → Users, add the admin's user (email and password, auto-confirmed).
 4. Set the environment variables below.

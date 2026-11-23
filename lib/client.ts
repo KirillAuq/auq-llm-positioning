@@ -47,7 +47,7 @@ export async function api<T>(path: string, body?: unknown, method?: "GET" | "POS
     body: body ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => ({ error: `Server returned ${res.status}` }));
-  if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error(json.error ?? `Request failed (${res.status})`), { status: res.status });
   return json as T;
 }
 
@@ -102,6 +102,13 @@ export interface AuditInput {
   brandHint: string;
   /** Optional. Statements the brand believes about itself, each put to every LLM as true or false. */
   claims: string[];
+  /**
+   * Optional. Where to look for the site's llms.txt: the file's URL, or any URL on the
+   * site. If one is found it joins the brand's own material.
+   */
+  llmsTxt?: string;
+  /** True when the person gave the llms.txt address themselves, so a miss is worth telling them about. */
+  llmsTxtGiven?: boolean;
 }
 
 /** One claim per line; bullets and numbering are stripped, duplicates and blanks dropped. */
@@ -172,7 +179,10 @@ export async function runAudit(input: AuditInput, onProgress: (p: Progress) => v
 
   // 1. Brand material
   onProgress({ step: "scrape", detail: `${input.urls.length} URL(s)`, done: 0, total: 1 });
-  const { pages } = await api<{ pages: ScrapedPage[] }>("/api/scrape", { urls: input.urls });
+  const scraped = await api<{ pages: ScrapedPage[]; llmsTxt?: ScrapedPage }>("/api/scrape", { urls: input.urls, llmsTxt: input.llmsTxt });
+  const pages = scraped.pages;
+  if (scraped.llmsTxt?.ok) pages.push(scraped.llmsTxt);
+  else if (scraped.llmsTxt && input.llmsTxtGiven) notes.push(`The llms.txt could not be used: ${scraped.llmsTxt.error}`);
   for (const p of pages) {
     if (!p.ok) notes.push(`Could not read ${p.url}: ${p.error}`);
     else if (p.warning) notes.push(`${p.url}: ${p.warning}`);
