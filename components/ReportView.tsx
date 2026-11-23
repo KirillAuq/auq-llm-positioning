@@ -33,15 +33,28 @@ function Llm({ p }: { p: Provider }) {
   );
 }
 
-function Section({ id, eyebrow, title, intro, children }: {
-  id: string; eyebrow: string; title: string; intro?: string; children: React.ReactNode;
+// The report has two headline sections (question by question, positioning gaps) and three
+// that back them up. "primary" gives a section the larger, accented treatment; the rest stay quiet.
+function Section({ id, eyebrow, title, intro, primary, children }: {
+  id: string; eyebrow: string; title: string; intro?: string; primary?: boolean; children: React.ReactNode;
 }) {
+  if (!primary) {
+    return (
+      <section id={id} className="supporting scroll-mt-6">
+        <div className="eyebrow">{eyebrow}</div>
+        <h2 className="mt-1 font-display text-xl text-body">{title}</h2>
+        {intro && <p className="mt-1 max-w-3xl text-sm text-muted">{intro}</p>}
+        <div className="mt-4">{children}</div>
+      </section>
+    );
+  }
   return (
     <section id={id} className="scroll-mt-6">
-      <div className="eyebrow">{eyebrow}</div>
-      <h2 className="display-sm mt-2">{title}</h2>
-      {intro && <p className="mt-1 max-w-3xl text-sm text-muted">{intro}</p>}
-      <div className="mt-4">{children}</div>
+      <div className="h-1 w-14 rounded-full bg-accent" />
+      <div className="eyebrow mt-4">{eyebrow}</div>
+      <h2 className="display-md mt-2">{title}</h2>
+      {intro && <p className="mt-2 max-w-3xl text-base text-body">{intro}</p>}
+      <div className="mt-6">{children}</div>
     </section>
   );
 }
@@ -144,7 +157,7 @@ function ClaimsSection({ claims }: { claims: ClaimCheck[] }) {
   const asked = PROVIDERS.filter((p) => claims.some((c) => c.results[p]));
   const cols = asked.length === 3 ? "md:grid-cols-3" : asked.length === 2 ? "md:grid-cols-2" : "";
   return (
-    <Section id="claims" eyebrow="Claims check" title="Do the LLMs confirm the brand's claims?"
+    <Section primary id="claims" eyebrow="Claims check" title="Do the LLMs confirm the brand's claims?"
       intro="Each claim was put to each LLM as a direct true/false question, and the verdict is the LLM's own first word. True means the LLM confirms the claim, not that the claim has been verified. The score is the share of answered checks that came back True.">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <ScoreTile big label={<span className="font-medium">Overall score</span>} s={claimScore(claims)} />
@@ -294,12 +307,18 @@ export default function ReportView({ report, onClose, closeLabel = "New audit" }
             ))}
           </div>
         )}
-        <nav hidden={tab === "claims" && claims.length > 0} className="no-print mt-5 flex flex-wrap gap-x-5 gap-y-1 border-y border-line py-2 text-sm text-muted">
-          {compared.length > 0 && <a href="#questions" className="hover:text-ink">Question by question</a>}
-          <a href="#gaps" className="hover:text-ink">Positioning gaps</a>
-          <a href="#views" className="hover:text-ink">Each LLM&apos;s view</a>
-          <a href="#self" className="hover:text-ink">Brand&apos;s own description</a>
-          <a href="#raw" className="hover:text-ink">Questions &amp; answers</a>
+        <nav hidden={tab === "claims" && claims.length > 0} aria-label="Report sections"
+          className="no-print mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 border-y border-line py-3 text-sm">
+          <div className="flex flex-wrap gap-2">
+            {compared.length > 0 && <a href="#questions" className="nav-key">Question by question</a>}
+            <a href="#gaps" className="nav-key">Positioning gaps</a>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted">
+            <span className="hint">Supporting detail:</span>
+            <a href="#views" className="hover:text-ink">Each LLM&apos;s view</a>
+            <a href="#self" className="hover:text-ink">Brand&apos;s own description</a>
+            <a href="#raw" className="hover:text-ink">Questions &amp; answers</a>
+          </div>
         </nav>
         {report.notes.length > 0 && (
           <div className="mt-4 rounded-lg border border-medium p-3 text-sm">
@@ -313,7 +332,7 @@ export default function ReportView({ report, onClose, closeLabel = "New audit" }
 
       <div className={`space-y-12 ${pane("positioning")}`}>
       {compared.length > 0 && (
-        <Section id="questions" eyebrow="Question by question" title="How close each LLM is to the brand's own answer"
+        <Section primary id="questions" eyebrow="Key finding · Question by question" title="How close each LLM is to the brand's own answer"
           intro="For every question asked, fixed and follow-up: the answer the brand's own material gives, and how similar each LLM's answer is to it. Similarity is about substance and emphasis, not wording. Where the brand's material doesn't answer a question, there is nothing to compare against.">
           <div className="card overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -340,7 +359,7 @@ export default function ReportView({ report, onClose, closeLabel = "New audit" }
       )}
 
       {g && (
-        <Section id="gaps" eyebrow="The main finding" title="Where the LLMs diverge from the brand's positioning"
+        <Section primary id="gaps" eyebrow="Key finding · Positioning gaps" title="Where the LLMs diverge from the brand's positioning"
           intro="Each gap sets what the brand says about itself against what the LLMs said. The brand side comes only from the URLs and positioning doc you supplied.">
           <p className="max-w-3xl text-lg leading-7 text-body">{g.headline}</p>
           <div className={`mt-4 grid gap-3 ${cols}`}>
@@ -374,6 +393,11 @@ export default function ReportView({ report, onClose, closeLabel = "New audit" }
           )}
         </Section>
       )}
+
+      <div className="flex items-center gap-4">
+        <span className="eyebrow text-muted">Supporting detail</span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
 
       <Section id="views" eyebrow="Per model" title="How each LLM sees the brand"
         intro="A summary of each model's answers across all questions, including how well it seems to know the brand at all.">
