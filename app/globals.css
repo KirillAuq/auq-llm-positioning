@@ -78,6 +78,11 @@ body {
   .display-md { @apply font-display text-[2rem] leading-[1.2] font-normal tracking-[-0.01em]; }
   .display-sm { @apply font-display text-2xl leading-8 font-normal; }
   .highlight { @apply text-accent; }
+  /* The two links in the report's nav that lead to its headline sections. */
+  .nav-key { @apply inline-flex items-center gap-2 rounded-md border border-accent/60 bg-accent/10 px-3 py-1.5 font-display font-medium text-ink hover:border-accent hover:bg-accent/20; }
+  /* Labels inside the supporting sections stay grey, so cyan marks only the key findings. */
+  .supporting .eyebrow { @apply text-muted; }
+  .nav-key::before { content: ""; @apply h-1.5 w-1.5 rounded-full bg-accent; }
 }
 
 /* Rendered LLM answers */
