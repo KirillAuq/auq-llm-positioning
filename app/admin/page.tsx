@@ -28,8 +28,8 @@ function Leads() {
   useEffect(() => { load(); }, [load]);
 
   const download = () => {
-    const rows = [["Date", "Email", "Website", "Brand name", "URLs", "Claims", "Positioning doc"],
-      ...(leads ?? []).map((l) => [l.created_at, l.email ?? "", l.domain, l.brand_hint, l.urls.join(" "), l.claims.join(" | "), l.positioning_doc])];
+    const rows = [["Date", "Name", "Email", "Website", "Brand name", "URLs", "llms.txt", "Claims", "Positioning doc"],
+      ...(leads ?? []).map((l) => [l.created_at, l.name, l.email ?? "", l.domain, l.brand_hint, l.urls.join(" "), l.llms_txt, l.claims.join(" | "), l.positioning_doc])];
     const blob = new Blob([rows.map((r) => r.map(csvCell).join(",")).join("\n")], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -55,7 +55,7 @@ function Leads() {
             <details>
               <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 p-3">
                 <span className="font-medium">{l.domain}</span>
-                <span className={l.email ? "" : "text-muted"}>{l.email ?? "No email given"}</span>
+                <span className={l.email || l.name ? "" : "text-muted"}>{[l.name, l.email].filter(Boolean).join(" · ") || "No name or email given"}</span>
                 <span className="hint ml-auto">{new Date(l.created_at).toLocaleString()}</span>
               </summary>
               <div className="space-y-3 border-t border-line p-3">
@@ -64,15 +64,16 @@ function Leads() {
                   <div className="eyebrow">URLs</div>
                   <ul className="mt-1 space-y-0.5">{l.urls.map((u, i) => <li key={i} className="[overflow-wrap:anywhere]">{u}</li>)}</ul>
                 </div>
+                {l.llms_txt && <div><div className="eyebrow">llms.txt</div><p className="mt-1 [overflow-wrap:anywhere]">{l.llms_txt}</p></div>}
                 {l.claims.length > 0 && (
                   <div><div className="eyebrow">Claims to check</div><ul className="mt-1 list-disc space-y-0.5 pl-4">{l.claims.map((c, i) => <li key={i}>{c}</li>)}</ul></div>
                 )}
-                <div>
-                  <div className="eyebrow">Positioning doc</div>
-                  {l.positioning_doc
-                    ? <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-bg p-3 text-xs">{l.positioning_doc}</pre>
-                    : <p className="mt-1 text-muted">None provided</p>}
-                </div>
+                {l.positioning_doc && (
+                  <div>
+                    <div className="eyebrow">Positioning doc</div>
+                    <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-bg p-3 text-xs">{l.positioning_doc}</pre>
+                  </div>
+                )}
                 <button className="btn" onClick={() => { if (confirm(`Delete this record for ${l.domain}?`)) run(async () => { await api(`/api/leads?id=${l.id}`, undefined, "DELETE"); await load(); }); }}>
                   Delete record
                 </button>

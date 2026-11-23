@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import ReportView from "@/components/ReportView";
+import VisitorHome from "@/components/VisitorHome";
+import type { Visitor } from "@/components/VisitorHome";
 import { api, claimScore, deleteReport, loadReports, parseClaims, runAudit, saveReport, STEPS } from "@/lib/client";
 import { useAuth } from "@/lib/auth";
-import type { Progress } from "@/lib/client";
+import type { AuditInput, Progress } from "@/lib/client";
 import { MAX_CLAIMS, MAX_URLS } from "@/lib/defaults";
 import type { Client, Report, ReportSummary } from "@/lib/types";
 
@@ -25,8 +27,8 @@ export default function Home() {
   const [report, setReport] = useState<Report | null>(null);
   const [history, setHistory] = useState<Report[]>([]);
   const { ready, enabled, user } = useAuth();
-  // Visitors: an optional email, saved with what they asked to audit.
-  const [email, setEmail] = useState("");
+  // Whether the audit in progress includes a claims check, so the progress list shows that step.
+  const [hasClaims, setHasClaims] = useState(false);
   // Team: which client the report is filed under.
   const [clients, setClients] = useState<Client[]>([]);
   const [clientId, setClientId] = useState("");
@@ -43,24 +45,31 @@ export default function Home() {
 
   const running = progress !== null;
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  // Leaving mid-audit throws the work away, so the browser asks before closing or reloading.
+  useEffect(() => {
+    if (!running) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [running]);
+
+  /** Runs an audit. `visitor` is set for someone not logged in, whose request is recorded for the admin. */
+  async function start(input: AuditInput, visitor?: Visitor) {
     setError("");
-    if (!urls[0].trim()) {
-      setTab("positioning");
-      setError("Add the brand URL before running the audit.");
-      return;
-    }
-    if (user && clientId === NEW_CLIENT && !newClient.trim()) {
-      setError("Name the new client, or pick an existing one.");
-      return;
-    }
     setNotice("");
+    setHasClaims(input.claims.length > 0);
     setProgress({ step: "scrape", detail: "", done: 0, total: 1 });
+    window.scrollTo(0, 0);
     try {
-      const input = { urls: urls.map((u) => u.trim()).filter(Boolean), positioningDoc: doc, brandHint, claims };
-      // A visitor's request is recorded before the audit starts, so it is kept even if they leave midway.
-      if (!user) await api("/api/leads", { ...input, email });
+      if (visitor) {
+        // Recorded before the audit starts, so it is kept even if they leave midway. A rejected
+        // entry (a bad email) stops here; a recording failure on our side does not cost them the audit.
+        try {
+          await api("/api/leads", { ...input, llmsTxt: input.llmsTxtGiven ? input.llmsTxt : "", ...visitor });
+        } catch (err) {
+          if ((err as { status?: number }).status === 400) throw err;
+        }
+      }
       const result = await runAudit(input, setProgress);
       if (user) {
         // The report is shown either way; a failed save is said plainly rather than losing the audit.
@@ -88,6 +97,21 @@ export default function Home() {
     }
   }
 
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!urls[0].trim()) {
+      setTab("positioning");
+      setError("Add the brand URL before running the audit.");
+      return;
+    }
+    if (clientId === NEW_CLIENT && !newClient.trim()) {
+      setError("Name the new client, or pick an existing one.");
+      return;
+    }
+    start({ urls: urls.map((u) => u.trim()).filter(Boolean), positioningDoc: doc, brandHint, claims });
+  }
+
   if (report) {
     return (
       <>
@@ -98,12 +122,21 @@ export default function Home() {
   }
 
   if (running) {
-    const steps = STEPS.filter((s) => s.id !== "claims" || claims.length > 0);
+    const steps = STEPS.filter((s) => s.id !== "claims" || hasClaims);
     const at = steps.findIndex((s) => s.id === progress.step);
     return (
       <div className="mx-auto max-w-xl">
-        <h1 className="display-md">Running the audit</h1>
-        <p className="mt-1 text-sm text-muted">This usually takes a few minutes. Keep this tab open.</p>
+        <h1 className="display-md">Running your audit</h1>
+        <div role="status" className="mt-4 flex items-start gap-3 rounded-lg border border-cta bg-cta/10 p-4">
+          <span className="mt-1 h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-cta" />
+          <div>
+            <div className="font-display font-medium">Don&apos;t close this window</div>
+            <p className="mt-1 text-sm text-body">
+              The audit runs in this tab and usually takes a few minutes. If you close or reload it, the audit stops and
+              you&apos;ll have to start again. Your report appears here as soon as it&apos;s ready.
+            </p>
+          </div>
+        </div>
         <ol className="card mt-6 divide-y divide-line">
           {steps.map((s, i) => (
             <li key={s.id} className={`flex items-start gap-3 p-4 text-sm ${i > at ? "text-muted" : ""}`}>
@@ -120,6 +153,36 @@ export default function Home() {
             </li>
           ))}
         </ol>
+      </div>
+    );
+  }
+
+  // Until we know whether someone is logged in, show nothing, so the two homepages don't flash past each other.
+  if (!ready) return null;
+
+  if (!user) {
+    return (
+      <div className="space-y-12">
+        <VisitorHome onRun={start} error={error} recordsNotice={enabled} />
+        {history.length > 0 && (
+          <section>
+            <div className="eyebrow text-muted">Your past audits (this browser)</div>
+            <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {history.map((r) => (
+                <li key={r.id} className="card flex items-center justify-between gap-2 p-3 text-sm">
+                  <button className="min-w-0 text-left" onClick={() => { setReport(r); window.scrollTo(0, 0); }}>
+                    <div className="truncate font-medium">{r.brandName}</div>
+                    <div className="hint">{new Date(r.createdAt).toLocaleDateString()} · {r.gapReport?.gaps.length ?? 0} gaps{r.claims?.length ? ` · claims ${claimScore(r.claims).pct ?? "–"}%` : ""}</div>
+                  </button>
+                  <button className="text-muted hover:text-high" aria-label={`Delete audit of ${r.brandName}`}
+                    onClick={() => { if (confirm(`Delete the audit of ${r.brandName}?`)) { deleteReport(r.id); setHistory(loadReports()); } }}>
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     );
   }
@@ -192,7 +255,7 @@ export default function Home() {
         </div>
         </div>
 
-        {ready && user && (
+        {(
           <div className="card p-5">
             <label className="label" htmlFor="client">Client</label>
             <p className="hint mb-2">The report is saved to the team&apos;s reports under this client. You can move it later.</p>
@@ -209,14 +272,6 @@ export default function Home() {
           </div>
         )}
 
-        {ready && enabled && !user && (
-          <div className="card p-5">
-            <label className="label" htmlFor="email">Your email <span className="font-normal text-muted">(optional)</span></label>
-            <p className="hint mb-2">Add it if you&apos;d like us to be able to follow up about your results.</p>
-            <input id="email" className="input max-w-sm" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-        )}
-
         <div className="flex flex-wrap items-center gap-4">
           <button className="btn btn-primary px-5 py-2.5" type="submit">Run audit</button>
           {user?.role === "admin" && (
@@ -224,51 +279,27 @@ export default function Home() {
               Questions, models and API keys are in <Link href="/settings" className="underline">Settings</Link>.
             </span>
           )}
-          {ready && enabled && !user && <span className="hint">We keep a record of the websites and details submitted here.</span>}
         </div>
       </form>
 
       <aside>
-        {user ? (
-          <>
-            <div className="flex items-baseline justify-between">
-              <div className="eyebrow">Recent team reports</div>
-              <Link href="/reports" className="hint underline">All reports</Link>
-            </div>
-            {recent.length === 0 && <p className="mt-2 text-sm text-muted">None yet.</p>}
-            <ul className="mt-2 space-y-2">
-              {recent.map((r) => (
-                <li key={r.id}>
-                  <Link href={`/reports?open=${r.id}`} className="card block p-3 text-sm hover:border-muted">
-                    <div className="truncate font-medium">{r.brand_name}</div>
-                    <div className="hint">
-                      {new Date(r.created_at).toLocaleDateString()} · {clients.find((c) => c.id === r.client_id)?.name ?? "No client"}
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <>
-        <div className="eyebrow">Past audits (this browser)</div>
-            {history.length === 0 && <p className="mt-2 text-sm text-muted">None yet.</p>}
-            <ul className="mt-2 space-y-2">
-              {history.map((r) => (
-                <li key={r.id} className="card flex items-center justify-between gap-2 p-3 text-sm">
-                  <button className="min-w-0 text-left" onClick={() => setReport(r)}>
-                    <div className="truncate font-medium">{r.brandName}</div>
-                    <div className="hint">{new Date(r.createdAt).toLocaleDateString()} · {r.gapReport?.gaps.length ?? 0} gaps{r.claims?.length ? ` · claims ${claimScore(r.claims).pct ?? "–"}%` : ""}</div>
-                  </button>
-                  <button className="text-muted hover:text-high" aria-label={`Delete audit of ${r.brandName}`}
-                    onClick={() => { if (confirm(`Delete the audit of ${r.brandName}?`)) { deleteReport(r.id); setHistory(loadReports()); } }}>
-                    ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
+        <div className="flex items-baseline justify-between">
+          <div className="eyebrow">Recent team reports</div>
+          <Link href="/reports" className="hint underline">All reports</Link>
+        </div>
+        {recent.length === 0 && <p className="mt-2 text-sm text-muted">None yet.</p>}
+        <ul className="mt-2 space-y-2">
+          {recent.map((r) => (
+            <li key={r.id}>
+              <Link href={`/reports?open=${r.id}`} className="card block p-3 text-sm hover:border-muted">
+                <div className="truncate font-medium">{r.brand_name}</div>
+                <div className="hint">
+                  {new Date(r.created_at).toLocaleDateString()} · {clients.find((c) => c.id === r.client_id)?.name ?? "No client"}
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </aside>
     </div>
   );

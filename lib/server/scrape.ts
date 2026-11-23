@@ -41,7 +41,7 @@ async function assertPublic(url: URL) {
   if (!ips.length || ips.some(isPrivate)) throw new Error("URL does not resolve to a public address");
 }
 
-async function fetchHtml(start: URL): Promise<{ html: string; finalUrl: string }> {
+async function fetchText(start: URL, accept: string, types: RegExp, what: string): Promise<{ html: string; finalUrl: string }> {
   let url = start;
   for (let hop = 0; hop < 6; hop++) {
     await assertPublic(url);
@@ -50,7 +50,7 @@ async function fetchHtml(start: URL): Promise<{ html: string; finalUrl: string }
       signal: AbortSignal.timeout(20_000),
       headers: {
         "user-agent": "Mozilla/5.0 (compatible; PositioningAudit/1.0)",
-        accept: "text/html,application/xhtml+xml",
+        accept,
       },
     });
     if (res.status >= 300 && res.status < 400) {
@@ -61,7 +61,7 @@ async function fetchHtml(start: URL): Promise<{ html: string; finalUrl: string }
     }
     if (!res.ok) throw new Error(`Site responded ${res.status}`);
     const type = res.headers.get("content-type") ?? "";
-    if (!/html|text\/plain/.test(type)) throw new Error(`Not an HTML page (${type || "unknown type"})`);
+    if (!types.test(type)) throw new Error(`Not ${what} (${type || "unknown type"})`);
     return { html: await res.text(), finalUrl: url.toString() };
   }
   throw new Error("Too many redirects");
@@ -108,7 +108,7 @@ function extract(html: string) {
 export async function scrape(raw: string): Promise<ScrapedPage> {
   try {
     const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`);
-    const { html, finalUrl } = await fetchHtml(url);
+    const { html, finalUrl } = await fetchText(url, "text/html,application/xhtml+xml", /html|text\/plain/, "an HTML page");
     const { title, text } = extract(html);
     const truncated = text.length > MAX_PAGE_CHARS;
     return {
@@ -127,5 +127,34 @@ export async function scrape(raw: string): Promise<ScrapedPage> {
     };
   } catch (err) {
     return { url: raw, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Reads a site's llms.txt, the plain-text summary some sites publish for AI models.
+ * Accepts the file's own URL, or any URL on the site (the file is then looked for at
+ * the site root). The text is used as-is, as one more piece of the brand's own material.
+ */
+export async function scrapeLlmsTxt(raw: string): Promise<ScrapedPage> {
+  const given = raw.trim();
+  try {
+    let url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(given) ? given : `https://${given}`);
+    if (!/\/llms(-full)?\.txt$/i.test(url.pathname)) url = new URL("/llms.txt", url.origin);
+    const { html: body, finalUrl } = await fetchText(url, "text/plain,text/markdown,*/*;q=0.5", /text\/|markdown|octet-stream/, "a text file");
+    const text = body.trim();
+    // Many sites answer any unknown path with their home page or a styled 404.
+    if (!text || /^\s*<(!doctype|html|head|body)\b/i.test(text)) throw new Error("No llms.txt found at that address");
+    const truncated = text.length > MAX_PAGE_CHARS;
+    return {
+      url: finalUrl,
+      ok: true,
+      title: "llms.txt",
+      text: truncated ? text.slice(0, MAX_PAGE_CHARS) : text,
+      chars: text.length,
+      truncated,
+      warning: truncated ? `llms.txt was ${text.length.toLocaleString()} characters; only the first ${MAX_PAGE_CHARS.toLocaleString()} were used.` : undefined,
+    };
+  } catch (err) {
+    return { url: given, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
