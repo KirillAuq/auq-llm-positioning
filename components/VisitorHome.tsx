@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import ReportPreview from "@/components/ReportPreview";
+import BrandVsClaude from "@/components/BrandVsClaude";
 import type { AuditInput } from "@/lib/client";
 
 export interface Visitor { name: string; email: string }
@@ -43,6 +43,13 @@ export default function VisitorHome({ onRun, error, recordsNotice }: {
   const [problem, setProblem] = useState("");
   const form = useRef<HTMLFormElement>(null);
   const moved = useRef(false);
+
+  // The homepage has its own page colour. It is set on the body so it covers the whole
+  // page, and removed again when the visitor moves on to the progress screen or a report.
+  useEffect(() => {
+    document.body.classList.add("home-bg");
+    return () => document.body.classList.remove("home-bg");
+  }, []);
 
   // After moving between steps, put the cursor in the step's first field. Not on first
   // load: focusing the form then would scroll the page past the introduction.
@@ -109,21 +116,24 @@ export default function VisitorHome({ onRun, error, recordsNotice }: {
 
   return (
     <div className="space-y-16">
+      {/* The homepage's own backdrop: a flat navy page (set on the body, below) with a faint cyan grid across the top. */}
+      <div aria-hidden="true" className="hero-grid pointer-events-none absolute inset-x-0 top-0 -z-10 h-[820px]" />
+
       <section className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
         <div>
           <div className="eyebrow">Free AI visibility check</div>
           <h1 className="display-lg mt-3">
-            See how ChatGPT, Claude and Gemini <span className="highlight">describe your brand</span>
+            See how ChatGPT, Claude and Gemini <span className="highlight">describe your product</span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-8 text-body">
-            Enter your website and we ask the three leading AI assistants about you, then show where their picture
-            differs from what your own site says.
+            Buyers of product-led SaaS now ask AI assistants which tool to try. Enter your website and we ask the three
+            leading assistants about you, then show where their answer differs from what your own site says.
           </p>
           <ul className="mt-6 space-y-2 text-sm text-body">
             {[
-              "Question by question: how close each assistant is to your own answer",
+              "Whether they get your category, your ideal user and your free plan right",
               "The positioning gaps that matter, with a suggested fix for each",
-              "A true or false verdict on the claims you care about",
+              "A true or false verdict on claims like pricing, integrations and compliance",
             ].map((t) => (
               <li key={t} className="flex gap-3"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />{t}</li>
             ))}
@@ -133,7 +143,7 @@ export default function VisitorHome({ onRun, error, recordsNotice }: {
             <span className="hint">Takes a few minutes. No account needed.</span>
           </div>
         </div>
-        <ReportPreview />
+        <BrandVsClaude />
       </section>
 
       <section id="start" className="scroll-mt-6">
@@ -240,6 +250,21 @@ export default function VisitorHome({ onRun, error, recordsNotice }: {
             {recordsNotice && <p className="hint mt-3">We keep a record of the websites and details submitted here.</p>}
           </form>
         </div>
+      </section>
+
+      <section>
+        <div className="eyebrow">Sample report</div>
+        <h2 className="display-md mt-2">What you get at the end</h2>
+        <p className="mt-2 max-w-2xl text-base text-body">
+          A report like this one, for an invented product analytics company. Yours is built from your own site and the
+          assistants&apos; real answers about you.
+        </p>
+        <figure className="card mt-8 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/sample-report.webp" width={2400} height={3000} loading="lazy" className="sample-fade block h-auto w-full"
+            alt="Sample audit report for a product-led SaaS company, showing how closely ChatGPT, Claude and Gemini match the brand's own answers question by question, followed by the positioning gaps found." />
+        </figure>
+        <div className="mt-6"><a href="#start" className="btn btn-primary px-6 py-3">Run your own audit</a></div>
       </section>
     </div>
   );

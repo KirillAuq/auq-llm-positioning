@@ -78,12 +78,25 @@ body {
   .display-md { @apply font-display text-[2rem] leading-[1.2] font-normal tracking-[-0.01em]; }
   .display-sm { @apply font-display text-2xl leading-8 font-normal; }
   .highlight { @apply text-accent; }
+  /* Visitor homepage backdrop: a flat navy page with faint cyan grid lines that fade out towards the edges. */
+  .hero-grid {
+    background-image: linear-gradient(90deg, #00fff80f 1px, #0000 1px), linear-gradient(#00fff80f 1px, #0000 1px);
+    background-size: 64px 64px;
+    -webkit-mask-image: radial-gradient(80% 70% at 50% 40%, #000 30%, #0000 100%);
+    mask-image: radial-gradient(80% 70% at 50% 40%, #000 30%, #0000 100%);
+  }
+  /* The sample image is the top of a longer report, so it trails off instead of ending on a hard cut. */
+  .sample-fade { -webkit-mask-image: linear-gradient(#000 82%, #0000); mask-image: linear-gradient(#000 82%, #0000); }
   /* The two links in the report's nav that lead to its headline sections. */
   .nav-key { @apply inline-flex items-center gap-2 rounded-md border border-accent/60 bg-accent/10 px-3 py-1.5 font-display font-medium text-ink hover:border-accent hover:bg-accent/20; }
   /* Labels inside the supporting sections stay grey, so cyan marks only the key findings. */
   .supporting .eyebrow { @apply text-muted; }
   .nav-key::before { content: ""; @apply h-1.5 w-1.5 rounded-full bg-accent; }
 }
+
+/* Visitor homepage: its own flat navy, with the header sitting on it rather than on a darker band. */
+body.home-bg { background: #0e151b; }
+body.home-bg > header { background: transparent; }
 
 /* Rendered LLM answers */
 .prose-answer { font-size: 0.875rem; line-height: 1.6; overflow-wrap: anywhere; color: var(--body); }
@@ -108,6 +121,7 @@ body {
     --high: #c62828; --medium: #946312; --low: #5b6770;
   }
   .no-print { display: none !important; }
+  .hero-grid { display: none !important; }
   body { background: #fff; }
   details > *:not(summary) { display: block !important; }
   .card { break-inside: avoid; }
